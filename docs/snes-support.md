@@ -4,6 +4,9 @@ The Android frontend now discovers and launches Super Nintendo cartridges throug
 Snes9x. The core revision is pinned in `cores/snes9x/revision`; Android packages
 its license and revision metadata with the library.
 
+See the [SNES roadmap](snes-roadmap.md) for remaining artwork, UI, validation and
+release work. This document records implemented behavior and test evidence.
+
 ## Supported flow
 
 - `.sfc`, `.smc` (including 512-byte copier headers), and one-game ZIP archives.

@@ -236,6 +236,12 @@ light guns, and MSU-1 sidecar files are not supported. Game compatibility and
 performance on physical KONKR hardware still need representative game testing.
 For build and verification details, see [SNES support](docs/snes-support.md).
 
+The [SNES roadmap](docs/snes-roadmap.md) tracks the remaining work toward
+first-class support: cartridge image prompts and output paths, automatic
+artwork and Cart Studio, display settings, real-game validation, and release
+readiness. The textured cartridge PNGs are still pending generation and
+integration.
+
 ### Save State Switcher
 
 | Button | Action |

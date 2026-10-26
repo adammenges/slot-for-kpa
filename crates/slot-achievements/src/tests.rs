@@ -935,3 +935,35 @@ fn verified_save_wrapper_does_not_fallback_on_absent_or_failed_active_sram() {
     assert!(matches!(failed.save_ram_verified(), Err(CoreError::State(message))
         if message == "active SRAM clone refused"));
 }
+
+#[test]
+fn snes_wram_sram_and_sa1_are_separate_and_missing_ram_never_awards() {
+    for (id, address, valid) in [(301, 0x1ffff, [0x20000, 0, 0]),
+        (302, 0x20007, [0x20000, 8, 0]), (303, 0xa07ff, [0x20000, 8, 0x800])] {
+        let mut rt = runtime::Runtime::new().unwrap();
+        assert!(rt.activate(id, &format!("0xH{address:06x}=7")));
+        let mut ram = vec![0; RAM_SIZE + GB_COVERAGE_SIZE];
+        assert!(rt.frame(&ram, &valid, 3).is_empty());
+        ram[address] = 7;
+        assert_eq!(rt.frame(&ram, &valid, 3), &[id]);
+    }
+    let mut rt = runtime::Runtime::new().unwrap();
+    assert!(rt.activate(304, "0xH020008=0"));
+    assert!(rt.activate(305, "0xH0a0000=0"));
+    let ram = vec![0; RAM_SIZE + GB_COVERAGE_SIZE];
+    for _ in 0..3 { assert!(rt.frame(&ram, &[0x20000, 8, 0], 3).is_empty()); }
+}
+
+#[test]
+fn snes_hash_ignores_copier_header_but_gba_hash_does_not() {
+    let root = tempfile::tempdir().unwrap();
+    let plain = vec![0x57; 32768];
+    let mut headed = vec![0x31; 512]; headed.extend_from_slice(&plain);
+    for (name, data) in [("game.sfc", &plain), ("game.SMC", &headed), ("game.gba", &headed)] {
+        std::fs::write(root.path().join(name), data).unwrap();
+    }
+    let expected = format!("{:x}", md5::compute(&plain));
+    assert_eq!(library::content_hash(&root.path().join("game.sfc")).unwrap(), expected);
+    assert_eq!(library::content_hash(&root.path().join("game.SMC")).unwrap(), expected);
+    assert_ne!(library::content_hash(&root.path().join("game.gba")).unwrap(), expected);
+}

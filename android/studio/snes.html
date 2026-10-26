@@ -1,0 +1,47 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SNES Cart Studio</title>
+<style>
+*{box-sizing:border-box}body{margin:0;padding:24px 32px 40px;background:#1b1b21;color:#eee9df;font:16px system-ui,sans-serif}header{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}h1{font-size:21px;margin:0}p{color:#b7b3bd}select,button,.pick{font:inherit;border:1px solid #77717f;border-radius:6px;padding:10px 16px;color:inherit;background:#36333f;cursor:pointer}select{width:100%;margin:12px 0 20px}button:focus-visible,select:focus-visible,.pick:focus-within{outline:3px solid #cbb3ff;outline-offset:3px}.layout{display:flex;gap:32px;align-items:center;justify-content:center}canvas{width:min(50vw,420px);height:auto}section{max-width:310px}#status{min-height:24px}#write{background:#eee9df;color:#25222c;margin-top:16px}input[type=file]{max-width:290px}a{color:#eee9df}button:disabled{opacity:.5} @media(max-width:600px){.layout{flex-direction:column}canvas{width:80vw}}
+</style>
+<header><h1>SUPER NINTENDO · CART STUDIO</h1><a id="back" href="index.html">Other systems</a></header>
+<select id="games" aria-label="SNES cartridge"></select>
+<div class="layout"><canvas width="360" height="240" aria-label="Cartridge preview"></canvas><section>
+<h2>Make it yours</h2><p>Choose a PNG label or cover. The preview shows how it will fit your cartridge.</p>
+<input id="file" type="file" accept="image/png" aria-label="Choose PNG artwork"><br>
+<button id="write" disabled>Save to slot.</button><p id="status" role="status"></p>
+</section></div>
+<script>
+'use strict';
+const data=JSON.parse(AndroidStudio.session()), carts=data.carts.filter(c=>c.platform==='SNES');
+const games=document.getElementById('games'), canvas=document.querySelector('canvas'), ctx=canvas.getContext('2d');
+const save=document.getElementById('write'), status=document.getElementById('status');
+const shell=new Image();shell.src='snes_cart.svg';
+let selected, label=null, dirty=false, revision=0;
+if (!data.carts.some(c=>c.platform!=='SNES')) document.getElementById('back').hidden=true;
+for(const c of carts){const o=document.createElement('option');o.value=c.id;o.textContent=c.stem;games.append(o)}
+function actions(){save.disabled=!dirty;window.AndroidToolbar?.actions(dirty,false)}
+function draw(){
+ ctx.clearRect(0,0,360,240);if(shell.complete)ctx.drawImage(shell,0,0,360,240);
+ ctx.save();ctx.beginPath();ctx.rect(66,54,228,138);ctx.clip();
+ if(label){const scale=Math.max(228/label.width,138/label.height);ctx.drawImage(label,66+(228-label.width*scale)/2,54+(138-label.height*scale)/2,label.width*scale,label.height*scale)}
+ else{ctx.fillStyle='#625272';ctx.fillRect(66,54,228,138);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='bold 16px system-ui';const words=(selected?.stem||'').split(' ');let line='',lines=[];for(const w of words){if(ctx.measureText(line+' '+w).width>200&&line){lines.push(line);line=w}else line+=(line?' ':'')+w}lines.push(line);lines.slice(0,4).forEach((l,i)=>ctx.fillText(l,180,95+i*22,205))}ctx.restore();
+}
+async function choose(){
+ const token=++revision;selected=carts.find(c=>c.id===games.value);label=null;dirty=false;status.textContent='';actions();draw();
+ if(selected?.hasLabel){const encoded=AndroidStudio.readLabel(selected.id);if(!encoded.startsWith('error:')){const img=new Image();img.src='data:image/png;base64,'+encoded;await img.decode();if(token===revision){label=img;draw()}}}
+}
+games.onchange=()=>{choose().catch(e=>status.textContent=e.message)};
+shell.onload=draw;
+document.getElementById('file').onchange=async e=>{
+ const file=e.target.files[0];if(!file)return;const token=revision;
+ try{if(file.size>9*1024*1024)throw Error('Choose a PNG smaller than 9 MiB.');const url=URL.createObjectURL(file),img=new Image();try{img.src=url;await img.decode()}finally{URL.revokeObjectURL(url)}if(token!==revision)return;if(img.width>4096||img.height>4096)throw Error('Choose an image up to 4096 × 4096 pixels.');label=img;dirty=true;status.textContent='Ready to save.';draw();actions()}catch(e){status.textContent=e.message}
+};
+save.onclick=()=>{
+ if(!selected||!label||!dirty)return;
+ const output=document.createElement('canvas');output.width=456;output.height=276;const c=output.getContext('2d');const scale=Math.max(output.width/label.width,output.height/label.height);c.drawImage(label,(output.width-label.width*scale)/2,(output.height-label.height*scale)/2,label.width*scale,label.height*scale);
+ const result=AndroidStudio.saveLabel('SNES',selected.stem,output.toDataURL('image/png').split(',')[1],true);
+ if(result==='written'){window.AndroidToolbar?.progress(0,0);selected.hasLabel=true;dirty=false;status.textContent='Saved to slot.';actions();window.AndroidToolbar?.summary(1,0,0,0,'')}else{status.textContent=result;window.AndroidToolbar?.progress(0,0)}
+};
+if(data.selectedKey&&carts.some(c=>c.id===data.selectedKey))games.value=data.selectedKey;
+choose().catch(e=>status.textContent=e.message);actions();document.body.dataset.ready='true';
+</script></html>

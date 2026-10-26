@@ -12,16 +12,18 @@ pub enum Core {
     Mgba,
     Gpsp,
     Gambatte,
+    Snes9x,
 }
 
 impl Core {
-    pub const ALL: [Core; 3] = [Core::Mgba, Core::Gpsp, Core::Gambatte];
+    pub const ALL: [Core; 4] = [Core::Mgba, Core::Gpsp, Core::Gambatte, Core::Snes9x];
 
     pub fn as_str(&self) -> &'static str {
         match self {
             Core::Mgba => "mgba",
             Core::Gpsp => "gpsp",
             Core::Gambatte => "gambatte",
+            Core::Snes9x => "snes9x",
         }
     }
 
@@ -34,6 +36,7 @@ impl Core {
             Core::Mgba => "mGBA",
             Core::Gpsp => "gpSP",
             Core::Gambatte => "Gambatte",
+            Core::Snes9x => "Snes9x",
         }
     }
 
@@ -42,15 +45,17 @@ impl Core {
             "mgba" => Some(Core::Mgba),
             "gpsp" => Some(Core::Gpsp),
             "gambatte" => Some(Core::Gambatte),
+            "snes9x" => Some(Core::Snes9x),
             _ => None,
         }
     }
 
     pub fn runs(self, platform: Platform) -> bool {
         match self {
-            Core::Mgba => true,
+            Core::Mgba => platform == Platform::Gba || platform.is_game_boy(),
             Core::Gpsp => platform == Platform::Gba,
-            Core::Gambatte => platform != Platform::Gba,
+            Core::Gambatte => platform.is_game_boy(),
+            Core::Snes9x => platform == Platform::Snes,
         }
     }
 
@@ -59,13 +64,14 @@ impl Core {
         match platform {
             Platform::Gba => Core::Gpsp,
             Platform::Gb | Platform::Gbc => Core::Gambatte,
+            Platform::Snes => Core::Snes9x,
         }
     }
 
     /// Which of the board's two sockets this core sits in.
     pub fn socket(self) -> usize {
         match self {
-            Core::Mgba => 0,
+            Core::Mgba | Core::Snes9x => 0,
             Core::Gpsp | Core::Gambatte => 1,
         }
     }
@@ -73,6 +79,7 @@ impl Core {
     pub fn default_for(platform: Platform) -> Core {
         match platform {
             Platform::Gba | Platform::Gb | Platform::Gbc => Core::Mgba,
+            Platform::Snes => Core::Snes9x,
         }
     }
 }
@@ -104,6 +111,7 @@ fn default_key(platform: Platform) -> &'static str {
         Platform::Gba => "gba",
         Platform::Gb => "gb",
         Platform::Gbc => "gbc",
+        Platform::Snes => "snes",
     }
 }
 

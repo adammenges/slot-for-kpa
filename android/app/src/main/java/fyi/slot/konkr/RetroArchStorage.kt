@@ -29,7 +29,7 @@ internal object RetroArchStorage {
     private const val MAX_STATE = 65 * 1024 * 1024
     /** RetroArch's per-core folder names: mGBA and gpSP for GBA, mGBA and
      *  Gambatte for GB/GBC. */
-    internal val CORES = setOf("mGBA", "gpSP", "Gambatte")
+    internal val CORES = setOf("mGBA", "gpSP", "Gambatte", "Snes9x")
     /** Slot's private file prefix for a core: mgba, gpsp or gambatte. */
     internal fun coreLower(core: String) = core.lowercase(Locale.ROOT)
 

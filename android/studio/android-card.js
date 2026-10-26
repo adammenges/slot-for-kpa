@@ -51,6 +51,8 @@ export function fromAndroid(bridge) {
   const labels = new Map();
   const identities = new Set();
   for (const cart of data.carts) {
+    if (cart.platform === 'SNES') continue; // Dedicated SNES label editor.
+
     if (!PLATFORMS.has(cart.platform) || typeof cart.stem !== 'string' ||
         !cart.stem || typeof cart.id !== 'string' ||
         !/^[0-9a-f]{16}$/.test(cart.id)) {

@@ -21,6 +21,11 @@ static int valid_address(uint32_t address) {
         return address < 0x17000 && current->coverage != NULL &&
             current->coverage[address] != 0;
     }
+    if (current->console == 3) {
+        if (address < 0x20000) return address < current->valid[0];
+        if (address < 0xa0000) return address - 0x20000 < current->valid[1];
+        return address < 0xa0800 && address - 0xa0000 < current->valid[2];
+    }
     size_t start;
     unsigned region;
     if (address < 0x8000) { start = 0; region = 0; }

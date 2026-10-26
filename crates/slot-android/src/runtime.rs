@@ -58,6 +58,7 @@ impl FaceTextures for Compositor {
 }
 
 // Android GLSurfaceView owns EGL context creation, current context and buffer swaps.
+#[cfg(any(target_os = "android", target_os = "linux"))]
 #[link(name = "EGL")]
 unsafe extern "C" {
     fn eglGetProcAddress(name: *const c_char) -> *const c_void;
@@ -81,9 +82,10 @@ impl Surface for AndroidSurface {
     }
 
     fn proc_address(&self, name: &str) -> *const c_void {
-        CString::new(name)
-            .map(|c| unsafe { eglGetProcAddress(c.as_ptr()) })
-            .unwrap_or(std::ptr::null())
+        #[cfg(any(target_os = "android", target_os = "linux"))]
+        { CString::new(name).map(|c| unsafe { eglGetProcAddress(c.as_ptr()) }).unwrap_or(std::ptr::null()) }
+        #[cfg(not(any(target_os = "android", target_os = "linux")))]
+        { let _ = name; std::ptr::null() }
     }
 }
 
@@ -143,6 +145,8 @@ const EJECT_HOLD_S: f32 = 0.35; // Original Slot hold after CRT-off.
 // retain the original 160ms CRT + 350ms hold + 450ms travel unchanged.
 const EJECT_SOUND_DELAY_S: f32 = 0.040;
 const EJECT_SOUND_PROGRESS: f32 = 1.0 - EJECT_SOUND_DELAY_S / EJECT_S;
+const RECENTS_SHELF: usize = Platform::ALL.len();
+const FAVORITES_SHELF: usize = RECENTS_SHELF + 1;
 const SELECT_CHORD_MS: u128 = 600;
 const SELECT_TAP_FRAMES: u8 = 3;
 const SHELF_STATUS_TEXT: [&str; 8] = [
@@ -408,7 +412,7 @@ enum ShelfOverlay {
     States,
 }
 
-const MENU_TEXT: [&str; 119] = [
+const MENU_TEXT: [&str; 122] = [
     "MENU",                             // 0
     "Library",                          // 1
     "Cart Studio",                      // 2
@@ -528,6 +532,9 @@ const MENU_TEXT: [&str; 119] = [
     "Clock",                             // 116, Its-TroyM PR #2 (Time Format)
     "SYSTEMS",                           // 117
     "Default Core",                      // 118
+    "SNES Shader",                       // 119
+    "SUPER NINTENDO",                    // 120
+    "Screen Size",                       // 121
 ];
 
 /// GB/GBC Bezel row value: OFF, SLOT., or a Watomsk overlay's name.
@@ -659,7 +666,7 @@ struct Engine {
     overlay: ShelfOverlay,
     settings: Settings,
     game_emulation: Option<EmulationProfile>,
-    emulation_core_labels: [(slot_gfx::TexId, u32, u32); 3],
+    emulation_core_labels: [(slot_gfx::TexId, u32, u32); 4],
     video_mode: VideoMode,
     wallpaper_texture: Option<slot_gfx::TexId>,
     wallpaper_personal: bool,
@@ -675,7 +682,7 @@ struct Engine {
     custom_wallpaper_present: bool,
     setting_values: Vec<(slot_gfx::TexId, u32, u32)>,
     // Settings > Systems default cores, by Platform order.
-    default_cores: [Core; 3],
+    default_cores: [Core; 4],
     // The live Palette row shows the palette's own name, one face per palette.
     palette_values: Vec<(slot_gfx::TexId, u32, u32)>,
     setting_carets: [(slot_gfx::TexId, u32, u32); 2],
@@ -708,10 +715,10 @@ struct Engine {
     link_failed_hints: [(slot_gfx::TexId, u32); 1],
     board_texture: Option<slot_gfx::TexId>,
     picker: Option<CorePicker>,
-    socket_textures: [slot_gfx::TexId; 3],
-    chip_textures: [slot_gfx::TexId; 3],
+    socket_textures: [slot_gfx::TexId; 4],
+    chip_textures: [slot_gfx::TexId; 4],
     chip_blank: slot_gfx::TexId,
-    pak_chip_textures: [slot_gfx::TexId; 3],
+    pak_chip_textures: [slot_gfx::TexId; 4],
     pak_chip_blank: slot_gfx::TexId,
     chip_shadow: slot_gfx::TexId,
     core_legend_faces: [(slot_gfx::TexId, u32); 3],
@@ -739,7 +746,7 @@ struct Engine {
     letter_face: Printed,
     letter_shown_at: Option<Instant>,
     // Unmodified upstream system names: 200ms in, 1200ms hold, 800ms out.
-    platform_faces: [Printed; 3],
+    platform_faces: [Printed; 4],
     recents_platform_face: Printed,
     favorites_platform_face: Printed,
     focus_seen: Option<(usize, String)>,
@@ -872,7 +879,7 @@ impl Engine {
         let recent_ids=visuals_root.as_deref().map(crate::recents::load)
             .unwrap_or_default();
         let recent_carts=crate::recents::carts(&recent_ids,
-            &[&shelves[0].carts, &shelves[1].carts, &shelves[2].carts]);
+            &shelves[..Platform::ALL.len()].iter().map(|s| s.carts.as_slice()).collect::<Vec<_>>());
         shelves.push(Shelf::new(if settings.show_recents {
             recent_carts
         } else { Vec::new() }));
@@ -881,7 +888,7 @@ impl Engine {
         let favorite_ids=visuals_root.as_deref().map(crate::favorites::load)
             .unwrap_or_default();
         let favorite_carts=crate::favorites::carts(&favorite_ids,
-            &[&shelves[0].carts,&shelves[1].carts,&shelves[2].carts]);
+            &shelves[..Platform::ALL.len()].iter().map(|s| s.carts.as_slice()).collect::<Vec<_>>());
         shelves.push(Shelf::new(favorite_carts));
 
         // Original Slot names, not abbreviations: Game Boy Advance,
@@ -903,6 +910,7 @@ impl Engine {
             gpu.create_face(&favorites_label),
             favorites_label.w);
 
+        let snes_shadow = gpu.create_face(&slot_ui::snes_cart_shadow());
         let shadow = cart_shadow();
         let gba = gpu.create_face(&shadow);
         let shadow = gb_cart_shadow(GbShell::Notched);
@@ -914,6 +922,7 @@ impl Engine {
         let star_tex=gpu.create_face(&star);
         for shelf in &mut shelves {
             shelf.set_shadow(gba);
+            shelf.set_snes_shadow(snes_shadow);
             shelf.set_gb_shadow(GbShell::Notched, gb);
             shelf.set_gb_shadow(GbShell::Rounded, gbc);
             shelf.set_star(star_tex,star.w,star.h);
@@ -1035,7 +1044,7 @@ impl Engine {
                                "SYNC LAB", "1×", "2×", "3×", "5×", "BUILT-IN",
                                "RA CLOCK LAB", "RETROARCH", "NATIVE",
                                "SLOT.", "GAME BOY", "POCKET", "COLOR",
-                               "mGBA", "gpSP", "Gambatte"]
+                               "mGBA", "gpSP", "Gambatte", "Snes9x", "INTEGER", "4:3", "STRETCH"]
             .into_iter().map(|value| {
                 let face = quick_value_face(value, true);
                 let tex = gpu.create_face(&face);
@@ -1217,7 +1226,7 @@ impl Engine {
             overlay_texs,
             custom_wallpaper_present,
             setting_values,
-            default_cores: [Core::Mgba; 3],
+            default_cores: [Core::Mgba; 4],
             palette_values,
             setting_carets,
             settings_hints,
@@ -1414,6 +1423,7 @@ impl Engine {
             }
             100 => {
                 let platform=self.current_cart_platform();
+                if platform == Platform::Snes { return true; }
                 if self.game_settings().shader_for(platform).includes_gba_color() {
                     set_message("This shader already includes color correction.".into());
                     return true;
@@ -1424,7 +1434,7 @@ impl Engine {
                     // Global shortcut should toggle the selected platform,
                     // not the old GBA-only compatibility setting.
                     let key=match platform {
-                        Platform::Gba=>22, Platform::Gbc=>23, Platform::Gb=>24
+                        Platform::Gba=>22, Platform::Gbc=>23, Platform::Gb=>24, Platform::Snes=>return true
                     };
                     self.change_setting(key,true);
                 }
@@ -1488,6 +1498,10 @@ impl Engine {
     }
 
     fn enter_multiplayer_menu(&mut self) {
+        if self.current_cart_platform() == Platform::Snes {
+            set_message("SNES multiplayer isn't supported yet.".into());
+            return;
+        }
         if self.game.is_none() { return; }
         if self.game.as_ref().is_some_and(GameSession::requires_relaunch) {
             set_message("Eject and reinsert the cartridge to link again.".into());
@@ -1637,7 +1651,7 @@ impl Engine {
         let backend = match kind {
             Core::Mgba => crate::multiplayer::Backend::MgbaSlotCable,
             Core::Gpsp => crate::multiplayer::Backend::GpspNetpacket,
-            Core::Gambatte => return Err("Link needs mGBA or gpSP".into()),
+            Core::Gambatte | Core::Snes9x => return Err("Link needs mGBA or gpSP".into()),
         };
         Ok(crate::multiplayer::LinkConfig {
             game: identity.code.clone(),
@@ -1776,7 +1790,7 @@ impl Engine {
             Core::Gpsp => GameSession::open_gpsp_solo_unresumed(
                 &rom, &dylib, &storage, &stem,
                 self.settings.colour_correction, self.ra_service.as_ref(), serial),
-            Core::Gambatte => Err("Gambatte never links".into()),
+            Core::Gambatte | Core::Snes9x => Err("This core has no Slot Link support".into()),
         }?;
         solo.restore_local_after_link(&rejoin)?;
         let backup = solo.commit_rejoined_solo(&rejoin)?;
@@ -2506,9 +2520,9 @@ impl Engine {
                         if let ShelfOverlay::GameMenu { row } = self.overlay {
                             match code {
                                 19 | 20 => self.overlay = ShelfOverlay::GameMenu {
-                                    row: move_menu_row(row, code, pause_rows(linked, relaunch).len()),
+                                    row: move_menu_row(row, code, self.game_pause_rows().len()),
                                 },
-                                96 => match pause_rows(linked, relaunch).get(row).copied() {
+                                96 => match self.game_pause_rows().get(row).copied() {
                                     Some(PauseRow::SaveEject) => self.handle(Input::Exit),
                                     Some(PauseRow::Resume) => self.overlay = ShelfOverlay::None,
                                     Some(PauseRow::States) if !linked && !relaunch =>
@@ -2561,8 +2575,7 @@ impl Engine {
                                     };
                                 },
                                 97 => self.overlay = ShelfOverlay::GameMenu {
-                                    row: pause_rows(self.game.as_ref().is_some_and(GameSession::linked),
-                                        self.game.as_ref().is_some_and(GameSession::requires_relaunch))
+                                    row: self.game_pause_rows()
                                         .iter().position(|item| *item==PauseRow::Settings).unwrap_or(0),
                                 },
                                 _ => {}
@@ -2579,9 +2592,9 @@ impl Engine {
                             },
                             ShelfOverlay::PauseGameplaySettings { row } => match code {
                                 19 | 20 => self.overlay = ShelfOverlay::PauseGameplaySettings {
-                                    row: move_menu_row(row,code,GAMEPLAY_KEYS.len()),
+                                    row: move_menu_row(row,code,self.pause_gameplay_keys().len()),
                                 },
-                                21 | 22 => self.change_game_screen_or_gameplay(GAMEPLAY_KEYS[row],code==22),
+                                21 | 22 => self.change_game_screen_or_gameplay(self.pause_gameplay_keys()[row],code==22),
                                 97 => self.overlay = ShelfOverlay::PauseSettings { row: 1 },
                                 _ => {}
                             },
@@ -2689,7 +2702,7 @@ impl Engine {
                     // (Integer, Original Ratio, Stretch).
                     // On GBA the shoulder buttons remain owned by the core.
                     // SELECT+shoulder save/load is handled below and takes priority.
-                    if self.current_cart_platform() != Platform::Gba && self.buttons & ButtonMask::SELECT == 0
+                    if self.current_cart_platform().is_game_boy() && self.buttons & ButtonMask::SELECT == 0
                         && (code == 102 || code == 103) {
                         if pressed {
                             let mode = if code == 102 {
@@ -2831,7 +2844,7 @@ impl Engine {
                             },
                             ShelfOverlay::ScreenSettings { row } => match code {
                                 19 | 20 => self.overlay = ShelfOverlay::ScreenSettings {
-                                    row: move_menu_row(row, code, 3),
+                                    row: move_menu_row(row, code, 4),
                                 },
                                 96 => {
                                     self.load_default_cores();
@@ -2851,7 +2864,7 @@ impl Engine {
                                     self.change_setting(key,code!=21);
                                 },
                                 97 => self.overlay=ShelfOverlay::ScreenSettings {
-                                    row:match platform{Platform::Gba=>0,Platform::Gbc=>1,Platform::Gb=>2},
+                                    row:match platform{Platform::Gba=>0,Platform::Gbc=>1,Platform::Gb=>2,Platform::Snes=>3},
                                 },
                                 108 => self.overlay=ShelfOverlay::None,
                                 _=>{}
@@ -2966,6 +2979,10 @@ impl Engine {
                         }
                         109 if !self.inserted && !self.shelves[self.active].carts.is_empty() => {
                             let selected = &self.shelves[self.active].carts[self.shelves[self.active].index];
+                            if selected.platform == Platform::Snes {
+                                set_message("Super Nintendo uses Snes9x.".into());
+                                return;
+                            }
                             let face = board_face(selected);
                             if let Some(texture) = self.board_texture {
                                 self.gpu.update_face(texture, &face);
@@ -3331,6 +3348,13 @@ impl Engine {
 
     fn apply_video_geometry(&mut self) {
         let platform = self.current_cart_platform();
+        if platform == Platform::Snes {
+            let size = self.game.as_ref().map_or(platform.picture(), GameSession::frame_size);
+            self.gpu.set_picture([0.0, 0.0, 1.0, 1.0]);
+            self.gpu.set_game_source_rect(video_mode::snes_source_rect(size, self.size, self.video_mode));
+            self.gpu.set_screen_effect(self.game_effect());
+            return;
+        }
         let (w, h) = platform.picture();
         let x = (slot_gfx::SRC_W - w) as f32 / (2 * slot_gfx::SRC_W) as f32;
         let y = (slot_gfx::SRC_H - h) as f32 / (2 * slot_gfx::SRC_H) as f32;
@@ -3404,7 +3428,7 @@ impl Engine {
         let bezel=self.game_settings().bezel_for(self.current_cart_platform());
         if !video_mode::bezel_fits(bezel,self.video_mode) {return None;}
         match (bezel,self.current_cart_platform()) {
-            (Bezel::None,_) | (_,Platform::Gba)=>None,
+            (Bezel::None,_) | (_,Platform::Gba | Platform::Snes)=>None,
             (Bezel::Default,Platform::Gb)=>Some(self.gb_bezel_tex),
             (Bezel::Default,Platform::Gbc)=>Some(self.gbc_bezel_tex),
             (Bezel::Gb,_)=>Some(self.overlay_texs[0]),
@@ -3418,6 +3442,7 @@ impl Engine {
             // Upstream v1.7 hides GBA bezel on an unframed 3:2 panel:
             // GBA already fills KONKR's native 960x640 display.
             Platform::Gba=>&[34,29],
+            Platform::Snes=>&[119,121],
             Platform::Gbc=>&[88,29,90],
             Platform::Gb=>&[89,29,36,90],
         }
@@ -3425,6 +3450,7 @@ impl Engine {
     fn screen_keys(platform:Platform)-> &'static [usize] {
         match platform {
             Platform::Gba=>&[0,22],
+            Platform::Snes=>&[32,34],
             Platform::Gbc=>&[21,23,26],
             Platform::Gb=>&[1,24,3,27],
         }
@@ -3434,6 +3460,7 @@ impl Engine {
     fn system_rows(platform: Platform)-> &'static [usize] {
         match platform {
             Platform::Gba=>&[118,34,29],
+            Platform::Snes=>&[118,119],
             Platform::Gbc=>&[118,88,29,90],
             Platform::Gb=>&[118,89,29,36,90],
         }
@@ -3441,12 +3468,13 @@ impl Engine {
     fn system_keys(platform:Platform)-> &'static [usize] {
         match platform {
             Platform::Gba=>&[29,0,22],
+            Platform::Snes=>&[33,32],
             Platform::Gbc=>&[30,21,23,26],
             Platform::Gb=>&[31,1,24,3,27],
         }
     }
     fn core_key_platform(key:usize)->Option<Platform> {
-        match key { 29=>Some(Platform::Gba), 30=>Some(Platform::Gbc), 31=>Some(Platform::Gb), _=>None }
+        match key { 29=>Some(Platform::Gba), 30=>Some(Platform::Gbc), 31=>Some(Platform::Gb), 33=>Some(Platform::Snes), _=>None }
     }
     fn load_default_cores(&mut self) {
         let paths=PATHS.lock().unwrap_or_else(|e| e.into_inner()).clone();
@@ -3456,6 +3484,7 @@ impl Engine {
     }
     /// The Default Core row swaps between mGBA and the system's other core.
     fn cycle_default_core(&mut self, platform: Platform) {
+        if platform == Platform::Snes { return; }
         let Some((storage,library))=PATHS.lock().unwrap_or_else(|e| e.into_inner()).clone()
             else { return };
         let at=platform as usize;
@@ -3472,12 +3501,12 @@ impl Engine {
     }
     fn screen_title(platform:Platform)->usize {
         match platform {
-            Platform::Gba=>91, Platform::Gbc=>92,Platform::Gb=>93,
+            Platform::Gba=>91, Platform::Gbc=>92,Platform::Gb=>93, Platform::Snes=>120,
         }
     }
     fn screen_submenu_platform(row:usize)->Platform {
         match row {
-            0=>Platform::Gba,1=>Platform::Gbc,_=>Platform::Gb,
+            0=>Platform::Gba,1=>Platform::Gbc,2=>Platform::Gb,_=>Platform::Snes,
         }
     }
 
@@ -3497,6 +3526,18 @@ impl Engine {
             Self::screen_keys(self.current_cart_platform()).get(row).copied()
         }
     }
+    fn game_pause_rows(&self) -> &'static [PauseRow] {
+        if self.current_cart_platform() == Platform::Snes { SNES_PAUSE_ROWS }
+        else { pause_rows(self.game.as_ref().is_some_and(GameSession::linked),
+            self.game.as_ref().is_some_and(GameSession::requires_relaunch)) }
+    }
+    fn pause_gameplay_keys(&self) -> &'static [usize] {
+        if self.current_cart_platform() == Platform::Snes { &[4,5,6,9] } else { &GAMEPLAY_KEYS }
+    }
+    fn pause_gameplay_rows(&self) -> &'static [usize] {
+        if self.current_cart_platform() == Platform::Snes { &[27,28,37,39] } else { &GAMEPLAY_ROWS }
+    }
+
     fn pause_settings_rows(&self) -> &'static [usize] {
         if self.game.as_ref().is_some_and(GameSession::linked) {
             // Display-only settings cannot alter GBA Link/RFU state.
@@ -3568,6 +3609,12 @@ impl Engine {
         });
     }
     fn change_game_screen_or_gameplay(&mut self, key: usize, right: bool) {
+        if key == 34 && self.current_cart_platform() == Platform::Snes {
+            let modes = [VideoMode::Actual, VideoMode::Aspect, VideoMode::Stretch];
+            let at = modes.iter().position(|m| *m == self.video_mode).unwrap_or(1);
+            self.set_video_mode(modes[(at + if right { 1 } else { 2 }) % 3]);
+            return;
+        }
         let Some(uri)=self.selected_rom_uri() else { return };
         let core=self.selected_emulation_core();
         let platform=self.current_cart_platform();
@@ -3792,25 +3839,25 @@ impl Engine {
         let Some(root)=Self::recents_root() else {return};
         let ids=crate::favorites::load(&root);
         let carts=crate::favorites::carts(&ids,
-            &[&self.shelves[0].carts,&self.shelves[1].carts,&self.shelves[2].carts]);
-        let was_favorite=self.active==4;
-        let previous_index=self.shelves[4].index;
-        let previous_uri=self.shelves[4].carts.get(previous_index).map(|c|c.rom.clone());
+            &self.shelves[..Platform::ALL.len()].iter().map(|s| s.carts.as_slice()).collect::<Vec<_>>());
+        let was_favorite=self.active==FAVORITES_SHELF;
+        let previous_index=self.shelves[FAVORITES_SHELF].index;
+        let previous_uri=self.shelves[FAVORITES_SHELF].carts.get(previous_index).map(|c|c.rom.clone());
         self.cart_render.invalidate_shelf(4);
-        let moves=self.shelves[4].replace_carts_preserving_visuals(carts);
+        let moves=self.shelves[FAVORITES_SHELF].replace_carts_preserving_visuals(carts);
         self.rekey_rack_visuals(4,&moves);
         // Unstarring from Favorites selects the next cart, exactly as upstream.
-        if was_favorite && !self.shelves[4].carts.is_empty() &&
+        if was_favorite && !self.shelves[FAVORITES_SHELF].carts.is_empty() &&
             previous_uri.as_ref().is_some_and(|uri|
-                !self.shelves[4].carts.iter().any(|cart|&cart.rom==uri)) {
-            let last=self.shelves[4].carts.len()-1;
-            self.shelves[4].select(previous_index.min(last));
+                !self.shelves[FAVORITES_SHELF].carts.iter().any(|cart|&cart.rom==uri)) {
+            let last=self.shelves[FAVORITES_SHELF].carts.len()-1;
+            self.shelves[FAVORITES_SHELF].select(previous_index.min(last));
         }
         for shelf in &mut self.shelves {
             shelf.mark_starred(|cart|ids.iter()
                 .any(|uri|uri==cart.rom.to_string_lossy().as_ref()));
         }
-        if was_favorite && self.shelves[4].carts.is_empty() {
+        if was_favorite && self.shelves[FAVORITES_SHELF].carts.is_empty() {
             self.active=next_nonempty_shelf(&self.shelves,0,1);
             self.platform_shown_at=Some(Instant::now());
         }
@@ -3840,19 +3887,19 @@ impl Engine {
         let Some(root)=Self::recents_root() else { return };
         let ids=crate::recents::load(&root);
         let carts=crate::recents::carts(&ids,
-            &[&self.shelves[0].carts,&self.shelves[1].carts,&self.shelves[2].carts]);
-        let was_recent=self.active==3;
+            &self.shelves[..Platform::ALL.len()].iter().map(|s| s.carts.as_slice()).collect::<Vec<_>>());
+        let was_recent=self.active==RECENTS_SHELF;
         // Reject completed worker art from the previous URI->index mapping.
         self.cart_render.invalidate_shelf(3);
-        let moves=self.shelves[3].replace_carts_preserving_visuals(
+        let moves=self.shelves[RECENTS_SHELF].replace_carts_preserving_visuals(
             if self.settings.show_recents { carts } else { Vec::new() });
         self.rekey_rack_visuals(3,&moves);
         // Restocking Recents must not erase Favorite stars: its Shelf rebuild
         // necessarily reconstructs the per-cart starred flags from scratch.
         let favorites=crate::favorites::load(&root);
-        self.shelves[3].mark_starred(|cart|favorites.iter()
+        self.shelves[RECENTS_SHELF].mark_starred(|cart|favorites.iter()
             .any(|uri|uri==cart.rom.to_string_lossy().as_ref()));
-        if was_recent && self.shelves[3].carts.is_empty() {
+        if was_recent && self.shelves[RECENTS_SHELF].carts.is_empty() {
             self.active=next_nonempty_shelf(&self.shelves,0,1);
         }
     }
@@ -4093,6 +4140,8 @@ impl Engine {
             19 => if self.settings.show_recents {4}else{5},
             20 => if self.settings.show_titles {4}else{5},
             21 => shader(scoped.shader_gbc),
+            32 => shader(scoped.shader_snes),
+            34 => match self.video_mode { VideoMode::Actual=>54, VideoMode::Aspect=>55, VideoMode::Stretch=>56 },
             22 => if scoped.shader_gba.includes_gba_color() { 42 }
                 else if scoped.colour_correction_gba {4}else{5},
             23 => if scoped.colour_correction_gbc {4}else{5},
@@ -4102,9 +4151,9 @@ impl Engine {
             27 => bezel_value(scoped.bezel_gb),
             28 => if self.settings.time_format==crate::settings::TimeFormat::TwelveHour
                 {35}else{36},
-            29..=31 => match Self::core_key_platform(key)
+            29..=31 | 33 => match Self::core_key_platform(key)
                 .map_or(Core::Mgba, |platform| self.default_cores[platform as usize]) {
-                Core::Mgba => 50, Core::Gpsp => 51, Core::Gambatte => 52,
+                Core::Mgba => 50, Core::Gpsp => 51, Core::Gambatte => 52, Core::Snes9x => 53,
             },
             _ => 5,
         }
@@ -4135,7 +4184,7 @@ impl Engine {
     fn draw_setting_values(&self, row: usize, keys: &[usize], out: &mut Vec<Draw>) {
         let top = settings_row_top(keys.len());
         for (index, key) in keys.iter().copied().enumerate() {
-            if key > 31 { continue; } // Action-only rows have no value.
+            if key > 34 { continue; } // Action-only rows have no value.
             let (tex, width, height) =
                 if key == 16 && matches!(self.settings.wallpaper,
                     crate::settings::WallpaperPick::File(_)) {
@@ -4368,7 +4417,7 @@ impl Engine {
                 self.draw_setting_values(row, &[10, 11, 12], out);
             }
             ShelfOverlay::ScreenSettings { row } => {
-                self.draw_original_style_menu(117, &[91,92,93], row, out);
+                self.draw_original_style_menu(117, &[91,92,93,120], row, out);
             }
             ShelfOverlay::ScreenSystemSettings {platform,row} => {
                 self.draw_original_style_menu(Self::screen_title(platform),
@@ -4443,9 +4492,8 @@ impl Engine {
                 }
             }
             ShelfOverlay::GameMenu { row } => {
-                let linked = self.game.as_ref().is_some_and(GameSession::linked);
                 let relaunch = self.game.as_ref().is_some_and(GameSession::requires_relaunch);
-                let indices: Vec<usize> = pause_rows(linked, relaunch).iter()
+                let indices: Vec<usize> = self.game_pause_rows().iter()
                     .map(|item| pause_row_text(*item, relaunch)).collect();
                 self.draw_original_style_menu(19, &indices, row, out);
             }
@@ -4460,8 +4508,8 @@ impl Engine {
                 self.draw_setting_values(row,&keys,out);
             }
             ShelfOverlay::PauseGameplaySettings { row } => {
-                self.draw_original_style_menu(33, &GAMEPLAY_ROWS, row, out);
-                self.draw_setting_values(row, &GAMEPLAY_KEYS, out);
+                self.draw_original_style_menu(33, self.pause_gameplay_rows(), row, out);
+                self.draw_setting_values(row, self.pause_gameplay_keys(), out);
             }
             ShelfOverlay::Multiplayer => self.draw_multiplayer(out),
             ShelfOverlay::Core => {
@@ -4807,13 +4855,11 @@ impl Engine {
         let (kind, selected, count) = match self.overlay {
             ShelfOverlay::Menu { row } => (1u8, row, 6usize),
             ShelfOverlay::Library { row } => (2u8, row, 6usize),
-            ShelfOverlay::GameMenu { row } => (3u8, row, pause_rows(
-                self.game.as_ref().is_some_and(GameSession::linked),
-                self.game.as_ref().is_some_and(GameSession::requires_relaunch)).len()),
+            ShelfOverlay::GameMenu { row } => (3u8, row, self.game_pause_rows().len()),
             ShelfOverlay::PauseSettings { row } => (13u8, row, self.pause_settings_rows().len()),
             ShelfOverlay::PauseScreenSettings { row } =>
                 (14u8, row, self.pause_screen_rows().len()),
-            ShelfOverlay::PauseGameplaySettings { row } => (15u8, row, GAMEPLAY_KEYS.len()),
+            ShelfOverlay::PauseGameplaySettings { row } => (15u8, row, self.pause_gameplay_keys().len()),
             ShelfOverlay::Multiplayer => (11u8, 0, 0usize),
             ShelfOverlay::Settings { row } => (4u8, row, 5usize),
             ShelfOverlay::GeneralSettings { row } =>
@@ -4822,7 +4868,7 @@ impl Engine {
             ShelfOverlay::InterfaceSettings { row } => (10u8, row, INTERFACE_ROWS.len()),
             ShelfOverlay::EmulationSettings { row } => (8u8, row, 3usize),
             ShelfOverlay::PauseEmulationSettings { row } => (9u8, row, 3usize),
-            ShelfOverlay::ScreenSettings { row } => (5u8, row, 3usize),
+            ShelfOverlay::ScreenSettings { row } => (5u8, row, 4usize),
             ShelfOverlay::ScreenSystemSettings { platform,row } =>
                 (16u8,row,Self::system_rows(platform).len()),
             ShelfOverlay::GameplaySettings { row } => (6u8, row, GAMEPLAY_KEYS.len()),
@@ -4935,7 +4981,7 @@ impl Engine {
                         .map_or("", |cart| cart.stem.as_str());
                     self.video_mode = PATHS.lock().unwrap_or_else(|e| e.into_inner())
                         .as_ref().map_or(VideoMode::Actual,
-                            |(root, _)| video_mode::video_mode_for(root, name));
+                            |(root, _)| video_mode::video_mode_for_platform(root, name, self.current_cart_platform()));
                     self.apply_video_geometry();
                     self.screen_power = 0.0;
                     self.exiting_screen = false;
@@ -5328,7 +5374,12 @@ impl Engine {
                     if self.select_tap_frames == 0 { self.buttons &= !ButtonMask::SELECT; }
                 }
                 let upload_started = Instant::now();
-                self.gpu.upload_game(session.frame());
+                self.gpu.upload_game_sized(session.frame(), session.frame_size());
+                if session.core_kind() == Core::Snes9x {
+                    self.gpu.set_picture([0.0, 0.0, 1.0, 1.0]);
+                    self.gpu.set_game_source_rect(video_mode::snes_source_rect(
+                        session.frame_size(), self.size, self.video_mode));
+                }
                 frame_phases.gpu_upload_us = upload_started.elapsed().as_micros() as u64;
                 RUMBLE_STRENGTH.store(
                     if live.rumble && !self.rewind_held {
@@ -5517,8 +5568,8 @@ impl Engine {
                     let elapsed=since.elapsed().as_millis() as u64;
                     if platform_name_running(elapsed) {
                         let face=match self.active {
-                                3=>self.recents_platform_face,
-                                4=>self.favorites_platform_face,
+                                RECENTS_SHELF=>self.recents_platform_face,
+                                FAVORITES_SHELF=>self.favorites_platform_face,
                                 index=>self.platform_faces[index],
                             };
                         Some((face,elapsed,true))
@@ -5771,6 +5822,9 @@ fn link_mode_can_switch(core: Core, chosen: LinkKind, code: &str,
 /// It prevents a linked session from routing "Save & Eject" to "Resume".
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PauseRow { Resume, States, Multiplayer, Settings, SaveEject }
+const SNES_PAUSE_ROWS: &[PauseRow] = &[
+    PauseRow::Resume, PauseRow::States, PauseRow::Settings, PauseRow::SaveEject,
+];
 const SOLO_PAUSE_ROWS: &[PauseRow] = &[
     PauseRow::Resume, PauseRow::States, PauseRow::Multiplayer,
     PauseRow::Settings, PauseRow::SaveEject,
@@ -5863,7 +5917,7 @@ fn restore_saved_focus(shelves:&mut [Shelf], focus:&crate::selection::Focus)->Op
         shelves[focus.rack].select(index);
         return Some(focus.rack);
     }
-    for rack in 0..3 {
+    for rack in 0..Platform::ALL.len().min(shelves.len()) {
         if let Some(index)=shelves.get(rack).and_then(|shelf|
             shelf.carts.iter().position(|cart|cart.rom.to_string_lossy()==focus.uri.as_str())) {
             shelves[rack].select(index);

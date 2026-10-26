@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="240" viewBox="0 0 360 240">
+<defs><linearGradient id="body" x2="0" y2="1"><stop stop-color="#d0cfd4"/><stop offset=".55" stop-color="#b6b5bb"/><stop offset="1" stop-color="#96959e"/></linearGradient></defs>
+<path d="M19 8H341Q352 8 352 20V211L336 232H24L8 211V20Q8 8 19 8Z" fill="url(#body)" stroke="#72717a" stroke-width="3"/>
+<path d="M19 12H341Q348 12 348 22" fill="none" stroke="#ecebf0" stroke-width="2"/>
+<path d="M19 29H341M19 35H341M19 41H341M24 205H336M24 211H336" stroke="#8d8c96" stroke-width="2"/>
+<path d="M23 50H49V191H23ZM311 50H337V191H311Z" fill="#aaa9b2"/>
+<path d="M27 54V186M33 54V186M39 54V186M45 54V186M315 54V186M321 54V186M327 54V186M333 54V186" stroke="#d5d4db" stroke-width="2"/>
+<rect x="62" y="50" width="236" height="146" rx="4" fill="#686571"/>
+<rect x="66" y="54" width="228" height="138" rx="1" fill="#777080"/>
+<circle cx="34" cy="221" r="4" fill="#62616b"/><circle cx="326" cy="221" r="4" fill="#62616b"/>
+<path d="M31 221H37M323 221H329" stroke="#c7c5cd"/>
+<path d="M165 217H195L180 226Z" fill="#8b8797"/>
+</svg>

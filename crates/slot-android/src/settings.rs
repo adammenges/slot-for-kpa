@@ -201,6 +201,7 @@ pub struct Settings {
     pub ff_speed: u8, pub ff_sound: bool, pub colour_correction: bool,
     pub rumble: bool, pub shader_gba: Shader, pub shader_gb: Shader,
     pub shader_gbc: Shader,
+    pub shader_snes: Shader,
     // Retain legacy field for old RC1 Settings.json and old desktop Link code;
     // the three platform fields below are authoritative after migration.
     pub colour_correction_gba: bool,
@@ -245,7 +246,7 @@ impl Default for Settings {
         // old installs may omit fields and still need their prior values.
         Self { ff_speed: 2, ff_sound: true, colour_correction: false,
             rumble: true, shader_gba: Shader::Off, shader_gb: Shader::Off,
-            shader_gbc: Shader::Off,
+            shader_gbc: Shader::Off, shader_snes: Shader::Off,
             colour_correction_gba: false, colour_correction_gb: false,
             colour_correction_gbc: false,
             bezel_gba: Bezel::None, bezel_gbc: Bezel::Default, bezel_gb: Bezel::Default,
@@ -352,6 +353,7 @@ impl Settings {
             slot_store::Platform::Gba=>self.shader_gba,
             slot_store::Platform::Gbc=>self.shader_gbc,
             slot_store::Platform::Gb=>self.shader_gb,
+            slot_store::Platform::Snes=>self.shader_snes,
         }
     }
     pub fn set_shader_for(&mut self,platform:slot_store::Platform,shader:Shader) {
@@ -359,6 +361,7 @@ impl Settings {
             slot_store::Platform::Gba=>self.shader_gba=shader,
             slot_store::Platform::Gbc=>self.shader_gbc=shader,
             slot_store::Platform::Gb=>self.shader_gb=shader,
+            slot_store::Platform::Snes=>self.shader_snes=shader,
         }
     }
     pub fn colour_for(&self,platform:slot_store::Platform)->bool {
@@ -366,6 +369,7 @@ impl Settings {
             slot_store::Platform::Gba=>self.colour_correction_gba,
             slot_store::Platform::Gbc=>self.colour_correction_gbc,
             slot_store::Platform::Gb=>self.colour_correction_gb,
+            slot_store::Platform::Snes=>false,
         }
     }
     pub fn set_colour_for(&mut self,platform:slot_store::Platform,value:bool) {
@@ -376,6 +380,7 @@ impl Settings {
             },
             slot_store::Platform::Gbc=>self.colour_correction_gbc=value,
             slot_store::Platform::Gb=>self.colour_correction_gb=value,
+            slot_store::Platform::Snes=>{},
         }
     }
     pub fn bezel_for(&self,platform:slot_store::Platform)->Bezel {
@@ -383,6 +388,7 @@ impl Settings {
             slot_store::Platform::Gba=>self.bezel_gba,
             slot_store::Platform::Gbc=>self.bezel_gbc,
             slot_store::Platform::Gb=>self.bezel_gb,
+            slot_store::Platform::Snes=>Bezel::None,
         }
     }
     pub fn set_bezel_for(&mut self,platform:slot_store::Platform,value:Bezel) {
@@ -390,6 +396,7 @@ impl Settings {
             slot_store::Platform::Gba=>self.bezel_gba=value,
             slot_store::Platform::Gbc=>self.bezel_gbc=value,
             slot_store::Platform::Gb=>self.bezel_gb=value,
+            slot_store::Platform::Snes=>{},
         }
     }
     // Screen: 0 GBA shader, 1 GB shader, 2 legacy GBA correction, 3 palettes.
@@ -407,6 +414,7 @@ impl Settings {
                 !self.colour_correction_gbc),
             24 => self.set_colour_for(slot_store::Platform::Gb,
                 !self.colour_correction_gb),
+            32 => self.shader_snes=self.shader_snes.step(&Shader::GB,right),
             21 => self.shader_gbc=self.shader_gbc.step(&Shader::GB,right),
             25 => self.bezel_gba=self.bezel_gba.step(),
             26 => self.bezel_gbc=self.bezel_gbc.step_in(&Bezel::GBC,right),

@@ -1,0 +1,20 @@
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -1550,4 +1550,15 @@ bool retro_load_game(const struct retro_game_info *game)
+     Memory.ClearSRAM();
+-
++
++    // Expose SA-1 I-RAM at rcheevos' synthetic address. WRAM and SRAM
++    // remain available through the standard libretro memory API.
++    if (rom_loaded) {
++        static struct retro_memory_descriptor iram;
++        memset(&iram, 0, sizeof(iram));
++        iram.ptr = Memory.FillRAM + 0x3000;
++        iram.start = 0x1080000;
++        iram.len = 0x800;
++        struct retro_memory_map map = { &iram, Settings.SA1 ? 1u : 0u };
++        environ_cb(RETRO_ENVIRONMENT_SET_MEMORY_MAPS, &map);
++    }
+     return rom_loaded;
+ }

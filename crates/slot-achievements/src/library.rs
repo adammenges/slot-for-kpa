@@ -1,6 +1,6 @@
 //! Background library preparation. A fingerprint avoids re-reading unchanged ROMs at boot.
 use std::collections::{BTreeMap, VecDeque};
-use std::io::Read;
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
@@ -105,9 +105,14 @@ pub(crate) fn content_hash(path: &Path) -> Result<String, String> {
         .map_err(|_| "Cannot read ROM metadata")?
         .len();
     if size == 0 || size > 64 * 1024 * 1024 {
-        return Err("Unsupported GBA ROM size".into());
+        return Err("Unsupported ROM size".into());
     }
     let mut file = std::fs::File::open(path).map_err(|_| "Cannot open ROM")?;
+    // rcheevos SNES hashing excludes a 512-byte copier header when the
+    // file size is 512 bytes beyond an 8 KiB boundary.
+    if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("sfc") || e.eq_ignore_ascii_case("smc")) && size % 0x2000 == 512 {
+        file.seek(SeekFrom::Start(512)).map_err(|_| "Cannot skip SNES copier header")?;
+    }
     let mut buffer = [0; 64 * 1024];
     let mut md5 = md5::Context::new();
     loop {

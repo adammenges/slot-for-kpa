@@ -79,7 +79,7 @@ internal object RomWarmCache {
 
     private fun trim(dir: File, selected: File) {
         val files = dir.listFiles()?.filter {
-            it.isFile && it.name.matches(Regex("[a-f0-9]{64}\\.(gba|gbc|gb)"))
+            it.isFile && it.name.matches(Regex("[a-f0-9]{64}\\.(gba|gbc|gb|sfc|smc)"))
         }?.sortedByDescending { it.lastModified() } ?: return
         var kept = 0L
         for (file in files) {

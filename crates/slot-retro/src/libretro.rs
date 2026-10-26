@@ -27,6 +27,7 @@ enum PixelFormat {
 
 struct Host {
     video: Vec<u8>,
+    video_size: (u32, u32),
     format: PixelFormat,
     audio: Vec<i16>,
     inputs: [u16; 2],
@@ -86,6 +87,12 @@ unsafe extern "C" fn set_rumble_state(port: c_uint, effect: c_uint, strength: u1
 
 unsafe extern "C" fn environment(cmd: c_uint, data: *mut c_void) -> bool {
     match cmd {
+        37 => { // RETRO_ENVIRONMENT_SET_GEOMETRY; actual size arrives with each frame.
+            if data.is_null() { return false; }
+            let geometry = &*(data as *const GameGeometry);
+            geometry.base_width > 0 && geometry.base_width <= 2048
+                && geometry.base_height > 0 && geometry.base_height <= 2048
+        }
         SET_MEMORY_MAPS => {
             if data.is_null() { return false; }
             let map = &*(data as *const MemoryMap);
@@ -356,16 +363,26 @@ unsafe extern "C" fn video_refresh(
         return;
     }
     with_host(|h| {
-        let cols = width.min(GBA_W) as usize;
-        let rows = height.min(GBA_H) as usize;
-        let ox = (GBA_W as usize - cols) / 2;
-        let oy = (GBA_H as usize - rows) / 2;
-        if cols != GBA_W as usize || rows != GBA_H as usize {
+        // Preserve the original GB/GBA canvas; larger consoles retain every pixel.
+        // Bound native callbacks before allocating or doing pointer arithmetic.
+        let pixel_bytes = if h.format == PixelFormat::Rgb565 { 2 } else { 4 };
+        if width == 0 || height == 0 || width > 2048 || height > 2048
+            || pitch < width as usize * pixel_bytes || pitch > 16384 { return; }
+        let (canvas_w, canvas_h) = if width <= GBA_W && height <= GBA_H {
+            (GBA_W, GBA_H)
+        } else { (width, height) };
+        h.video_size = (canvas_w, canvas_h);
+        h.video.resize((canvas_w * canvas_h * 4) as usize, 0);
+        let cols = width as usize;
+        let rows = height as usize;
+        let ox = (canvas_w as usize - cols) / 2;
+        let oy = (canvas_h as usize - rows) / 2;
+        if cols != canvas_w as usize || rows != canvas_h as usize {
             h.video.fill(0);
         }
         for y in 0..rows {
             let src = (data as *const u8).add(y * pitch);
-            let row = ((y + oy) * GBA_W as usize + ox) * 4;
+            let row = ((y + oy) * canvas_w as usize + ox) * 4;
             match h.format {
                 PixelFormat::Xrgb8888 => {
                     ptr::copy_nonoverlapping(src, h.video.as_mut_ptr().add(row), cols * 4);
@@ -635,6 +652,7 @@ impl LibretroCore {
         }
         let mut host = Box::new(Host {
             video: vec![0; VIDEO_BYTES],
+            video_size: (GBA_W, GBA_H),
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),
             inputs: [0; 2],
@@ -808,6 +826,23 @@ impl RetroCore for LibretroCore {
         &self, ram: &mut [u8], coverage: &mut [u8], console: u32
     ) -> [usize; 3] {
         if !self.loaded { return [0; 3]; }
+        if console == 3 {
+            if ram.len() < 0xa0800 { return [0; 3]; }
+            let mut valid = [0; 3];
+            for (region, id, offset, limit) in [(0, 2, 0, 0x20000), (1, MEMORY_SAVE_RAM, 0x20000, 0x80000)] {
+                let ptr = unsafe { (self.api.get_memory_data)(id) };
+                let len = unsafe { (self.api.get_memory_size)(id) }.min(limit);
+                if !ptr.is_null() && len > 0 {
+                    unsafe { ptr::copy_nonoverlapping(ptr.cast::<u8>(), ram[offset..].as_mut_ptr(), len); }
+                    valid[region] = len;
+                }
+            }
+            if let Some(desc) = self.host.memory.iter().find(|d| d.start == 0x1080000 && !d.ptr.is_null() && d.len >= 0x800 && d.offset == 0) {
+                unsafe { ptr::copy_nonoverlapping(desc.ptr.cast::<u8>(), ram[0xa0000..].as_mut_ptr(), 0x800); }
+                valid[2] = 0x800;
+            }
+            return valid;
+        }
         if console == 4 || console == 6 {
             let filled = copy_gb_achievement_map(&self.host.memory, ram, coverage);
             // An actual mapped WRAM window is required, not merely ROM/VRAM.
@@ -923,6 +958,8 @@ impl RetroCore for LibretroCore {
         let _a = Active::bind(&mut self.host);
         unsafe { report_audio_status(skip) };
     }
+
+    fn video_size(&self) -> (u32, u32) { self.host.video_size }
 
     fn video_xrgb8888(&self) -> &[u8] {
         &self.host.video
@@ -1172,9 +1209,25 @@ mod tests {
     use std::collections::HashMap;
     use std::ffi::CStr;
 
+    #[test]
+    fn snes_frames_keep_all_pixels_and_follow_resolution_changes() {
+        let mut host = host_with(HashMap::new(), false);
+        let _active = Active::bind(&mut host);
+        for (w, h) in [(256, 224), (512, 478), (256, 239), (240, 160)] {
+            let frame = vec![0x5au8; w * h * 4];
+            unsafe { video_refresh(frame.as_ptr().cast(), w as u32, h as u32, w * 4); }
+            let (size, pixels) = unsafe { with_host(|h| (h.video_size, h.video.clone())).unwrap() };
+            assert_eq!(size, (w as u32, h as u32));
+            assert_eq!(pixels, frame);
+            unsafe { video_refresh(ptr::null(), w as u32, h as u32, w * 4); }
+            assert_eq!(unsafe { with_host(|h| h.video.clone()).unwrap() }, frame);
+        }
+    }
+
     fn host_with(options: HashMap<String, CString>, options_dirty: bool) -> Box<Host> {
         Box::new(Host {
             video: vec![0; VIDEO_BYTES],
+            video_size: (GBA_W, GBA_H),
             format: PixelFormat::Xrgb8888,
             audio: Vec::new(),
             inputs: [0; 2],

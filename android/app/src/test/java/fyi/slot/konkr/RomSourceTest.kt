@@ -29,7 +29,7 @@ class RomSourceTest {
         ByteArray(0x180) { (it and 0xFF).toByte() }
 
     @Test fun acceptsPlainAndZipIgnoringCase() {
-        for (name in listOf("game.gba", "game.GB", "game.GbC", "GAME.ZIP"))
+        for (name in listOf("game.gba", "game.GB", "game.GbC", "GAME.ZIP", "Game.SFC", "Game.smc"))
             assertTrue(RomSource.isAcceptedFile(name))
         for (name in listOf("game.7z", "game.rar", "game.zip.exe", "game.srm"))
             assertFalse(RomSource.isAcceptedFile(name))
@@ -51,7 +51,7 @@ class RomSourceTest {
 
     @Test fun distinctEmbeddedGbcGbAndGbaExtensions() {
         val rom = cartridge()
-        for (ext in listOf("gb", "gbc", "gba")) {
+        for (ext in listOf("gb", "gbc", "gba", "sfc", "smc")) {
             val zip = archive("game.$ext" to rom)
             val result = RomSource.inspect(ByteArrayInputStream(zip), "game.zip")
             assertEquals(ext, result.extension)
@@ -98,7 +98,7 @@ class RomSourceTest {
     }
 
     @Test fun zipSaveStemPreservesRetroArchIdentityAndEmbeddedGbaType() {
-        for (ext in listOf("gba", "gbc", "gb")) {
+        for (ext in listOf("gba", "gbc", "gb", "sfc", "smc")) {
             val normalized = RomSource.archiveSaveFilename("Pokemon Emerald.ZIP", ext.uppercase())
             assertEquals("Pokemon Emerald.$ext", normalized)
             assertEquals(ext == "gba", normalized.endsWith(".gba", ignoreCase = true))

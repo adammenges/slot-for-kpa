@@ -7,7 +7,7 @@ pub struct Focus { pub rack: usize, pub uri: String }
 pub fn load(root: &Path) -> Option<Focus> {
     std::fs::read(root.join(FILE)).ok()
         .and_then(|bytes|serde_json::from_slice::<Focus>(&bytes).ok())
-        .filter(|focus|focus.rack<=4 && !focus.uri.is_empty())
+        .filter(|focus|focus.rack<slot_store::Platform::ALL.len()+2 && !focus.uri.is_empty())
 }
 pub fn store(root: &Path, focus: &Focus) -> std::io::Result<()> {
     std::fs::create_dir_all(root)?;

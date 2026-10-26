@@ -87,11 +87,16 @@ pub fn screen_effect(shader: Shader, platform: Platform, mode: VideoMode) -> Scr
     }
 }
 
+#[cfg(test)]
 pub fn video_mode_for(root: &Path, stem: &str) -> VideoMode {
+    video_mode_for_platform(root, stem, Platform::Gba)
+}
+
+pub fn video_mode_for_platform(root: &Path, stem: &str, platform: Platform) -> VideoMode {
     ini::value(root, VIDEO_MODE_FILE, stem)
         .as_deref()
         .and_then(VideoMode::parse)
-        .unwrap_or_default()
+        .unwrap_or(if platform == Platform::Snes { VideoMode::Aspect } else { VideoMode::Actual })
 }
 
 pub fn write_video_mode(root: &Path, stem: &str, mode: VideoMode) -> std::io::Result<()> {
@@ -124,9 +129,38 @@ pub fn source_rect(platform: Platform, mode: VideoMode) -> [f32; 4] {
     ]
 }
 
+/// UV window including black margins, so SNES pixels are never cropped.
+pub fn snes_source_rect((w, h): (u32, u32), (panel_w, panel_h): (u32, u32), mode: VideoMode) -> [f32; 4] {
+    if w == 0 || h == 0 || panel_w == 0 || panel_h == 0 { return WHOLE_TEXTURE; }
+    let (pw, ph) = (panel_w as f32, panel_h as f32);
+    let (shown_w, shown_h) = match mode {
+        VideoMode::Stretch => (pw, ph),
+        VideoMode::Aspect => { let sh = ph.min(pw * 3.0 / 4.0); (sh * 4.0 / 3.0, sh) },
+        VideoMode::Actual => {
+            let scale = (pw / w as f32).min(ph / h as f32).floor().max(1.0);
+            (w as f32 * scale, h as f32 * scale)
+        }
+    };
+    let (x, y) = ((pw / shown_w).max(1.0), (ph / shown_h).max(1.0));
+    [(1.0 - x) / 2.0, (1.0 - y) / 2.0, x, y]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snes_aspect_and_integer_scaling_preserve_the_full_picture() {
+        let rect = snes_source_rect((256,224), (960,640), VideoMode::Aspect);
+        assert_eq!(rect, [-0.0625,0.0,1.125,1.0]);
+        let integer = snes_source_rect((256,224), (960,640), VideoMode::Actual);
+        assert_eq!(960.0 / integer[2] / 256.0, 2.0);
+        assert_eq!(640.0 / integer[3] / 224.0, 2.0);
+        assert_eq!(snes_source_rect((512,478),(960,640),VideoMode::Stretch), WHOLE_TEXTURE);
+        let root = tempfile::tempdir().unwrap();
+        assert_eq!(video_mode_for_platform(root.path(), "Mario", Platform::Snes), VideoMode::Aspect);
+        assert_eq!(video_mode_for_platform(root.path(), "Mario", Platform::Gba), VideoMode::Actual);
+    }
 
     #[test]
     fn shoulders_step_through_the_three_sizes() {

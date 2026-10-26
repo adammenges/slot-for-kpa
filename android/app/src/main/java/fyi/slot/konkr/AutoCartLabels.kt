@@ -68,7 +68,9 @@ internal object AutoCartLabels {
     fun fill(context: Context, shouldContinue: () -> Boolean, onSaved: (String) -> Unit): Boolean {
         if (!shouldContinue()) return false
         batchDelayMs = 4_000L
-        val games = CartStudioCatalog.games(context)
+        // The official artwork catalog currently covers the three Game Boy systems.
+        // SNES uses its generated label or artwork chosen in Cart Studio.
+        val games = CartStudioCatalog.games(context).filter { it.platform != "SNES" }
         if (games.isEmpty()) {
             Log.i(TAG, "Deferred: cached ROM library not ready (zero indexed games)")
             return false

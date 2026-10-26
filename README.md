@@ -31,7 +31,7 @@ Everything you love about the original slot., now on the KONKR Pocket Advance �
 - **A cartridge-first experience** — Browse your games as beautifully rendered physical cartridges, complete with satisfying insertion and ejection animations and sounds.
 - **Made for Game Boy Advance** — GBA takes center stage, with dedicated shelves for Game Boy and Game Boy Color games.
 - **Pick a cartridge and play** — No complicated menus or unnecessary distractions. Insert a cartridge and jump straight into your game.
-- **Two emulation cores per system** — mGBA or gpSP for GBA, mGBA or Gambatte for GB and GBC, with a default core per system and individual game settings.
+- **Emulation cores** — mGBA or gpSP for GBA, mGBA or Gambatte for GB and GBC, and Snes9x for Super Nintendo, with individual game settings.
 - **Cart Studio** — Customize your cartridges with authentic artwork, labels and shell colors.
 - **All the essentials** — Save states, automatic saving, rewind, fast-forward, turbo buttons and rumble.
 - **Make it yours** — Light and dark themes, wallpapers, favorites, recently played games, shaders, color correction and screen bezels.
@@ -46,7 +46,7 @@ Built specifically for the KONKR Pocket Advance
 - **Easy library setup** — Choose your ROM folder directly from Android, with optional BIOS, saves and save states folders.
 - **RetroArch save compatibility** — Share SRAM saves, RTC data and compatible save states with RetroArch, using the same folders and matching emulation cores.
 - **Syncthing-friendly** — Keep your saves synchronized across devices by sharing your RetroArch save and state folders.
-- **RetroAchievements, online and offline** — Earn achievements on supported GBA, GB and GBC games. Prepare your library while connected, then play offline and synchronize your unlocks when you're back online.
+- **RetroAchievements, online and offline** — Earn achievements on supported GBA, GB, GBC and SNES games. Prepare your library while connected, then play offline and synchronize your unlocks when you're back online.
 - **Multiplayer on Android** — Play compatible games over local Wi-Fi using mGBA Link Cable or gpSP Link Cable / Wireless RFU.
 - **More GBA shaders** — Ten selectable GBA shader presets plus Off, including LCD3x, LCD Grid, Dot and display styles inspired by the original GBA and GBA SP.
 - **Independent system settings** — Configure the default core, shader, color correction and bezel of GBA, GB and GBC separately in **START → Settings → Systems**.
@@ -77,7 +77,7 @@ On your first launch, you'll see a message asking you to press **START**.
 4. Grant Android permission to access the folder.
 5. Wait for your cartridges to appear in the carousel. You're ready to play!
 
-**Supported cartridges:** `.gba`, `.gbc`, `.gb` and `.zip` archives containing a GB, GBC or GBA ROM. Each ZIP appears as one cartridge and launches its first supported ROM entry; use one game per archive for predictable saves and artwork. Original ZIP files stay untouched.
+**Supported cartridges:** `.gba`, `.gbc`, `.gb`, `.sfc`, `.smc` and `.zip` archives containing a GB, GBC, GBA or SNES ROM. Each ZIP appears as one cartridge and launches its first supported ROM entry; use one game per archive for predictable saves and artwork. Original ZIP files stay untouched.
 
 ### Optional folders
 
@@ -133,6 +133,24 @@ The KONKR's round top button is called **slot. cap** in this port. Since it cont
 | <kbd>SELECT</kbd> + <kbd>Y</kbd> | Toggle color correction |
 | <kbd>SELECT</kbd> + <kbd>L2</kbd> / <kbd>R2</kbd> | Change GB palette (when enabled) |
 | <kbd>L1</kbd> / <kbd>R1</kbd> | Bigger / smaller screen: Integer, Original Ratio, Stretch (GB/GBC only) |
+
+### Super Nintendo
+
+SNES cartridges use the bundled Snes9x core. Add `.sfc` or `.smc` files to your
+ROM folder and refresh the library. Copier headers and single-game ZIP archives
+are supported. Ordinary SNES games do not require a BIOS.
+
+A/B/X/Y and L1/R1 are native SNES buttons. Turbo A/B does not replace X/Y.
+Open the in-game menu → Settings → Screen to choose **Integer**, **4:3**
+(the default), or **Stretch**; L1/R1 stay available to the game. Save states,
+battery saves, rewind, fast-forward and run-ahead use the existing controls.
+SNES gets a separate shelf and cartridge shape. Cart Studio accepts custom PNG
+labels; automatic official artwork and shell colors remain Game Boy features.
+
+This implementation supports one SNES controller. Slot Link multiplayer, mouse,
+light guns, and MSU-1 sidecar files are not supported. Game compatibility and
+performance on physical KONKR hardware still need representative game testing.
+For build and verification details, see [SNES support](docs/snes-support.md).
 
 ### Save State Switcher
 

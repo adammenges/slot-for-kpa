@@ -78,17 +78,19 @@ impl EmulationProfile {
         // Menu key 1 inherited shared GB/GBC shader from RC1. Route
         // GBC to its new key without altering the GBA or GB settings.
         let actual_key=match (platform,key) {
+            (Platform::Snes,1)=>32,
             (Platform::Gbc,1)=>21,
             (Platform::Gba,2)=>22,
             (Platform::Gbc,2)=>23,
             (Platform::Gb,2)=>24,
             (_,25..=27)=>match platform {
-                Platform::Gba=>25,Platform::Gbc=>26,Platform::Gb=>27
+                Platform::Gba=>25,Platform::Gbc=>26,Platform::Gb=>27,Platform::Snes=>usize::MAX
             },
             _=>key,
         };
         if !view.change(actual_key,right) { return false; }
         match key {
+            32 if platform==Platform::Snes => self.screen_shader=Some(view.shader_snes),
             0 if platform==Platform::Gba =>
                 self.screen_shader=Some(view.shader_gba),
             1 if platform!=Platform::Gba =>

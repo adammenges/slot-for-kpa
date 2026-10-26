@@ -45,6 +45,7 @@ class CartStudioActivity : Activity() {
     private val changed = AtomicBoolean(false)
     private var web: WebView? = null
     private var singleCartMode = false
+    private var snesOnly = false
     private var pendingPngPicker: ValueCallback<Array<Uri>>? = null
 
     private fun immersive() {
@@ -96,6 +97,7 @@ class CartStudioActivity : Activity() {
                 // X is an editor for ONE ROM, not a full catalog scan.
                 // Menu -> Cart Studio still sees all GB/GBC/GBA games.
                 val studioCarts = if (selected != null) carts.filter { it.uri == selected } else carts
+                snesOnly = studioCarts.all { it.platform == "SNES" }
                 val bridge = CartStudioBridge(this, studioCarts, selected, changed)
                 runOnUiThread {
                     if (!isFinishing && !isDestroyed) openStudio(frame, notice, bridge)
@@ -169,7 +171,7 @@ class CartStudioActivity : Activity() {
                 view: WebView?, request: WebResourceRequest?
             ): Boolean {
                 // Never let a frame with the JavaScript bridge navigate to a remote page.
-                return request?.url?.toString() != PAGE
+                return request?.url?.toString() !in setOf(PAGE, "$ORIGIN/studio/snes.html")
             }
         }
         w.webChromeClient = object : WebChromeClient() {
@@ -342,7 +344,7 @@ class CartStudioActivity : Activity() {
         toolbar.addView(rule, FrameLayout.LayoutParams(-1,
             (resources.displayMetrics.density + 0.5f).toInt().coerceAtLeast(1),
             Gravity.BOTTOM))
-        w.loadUrl(PAGE)
+        w.loadUrl(if (snesOnly) "$ORIGIN/studio/snes.html" else PAGE)
     }
 
     private fun missing(): WebResourceResponse =
@@ -371,6 +373,7 @@ class CartStudioActivity : Activity() {
         if (isFinishing) return
         if (singleCartMode) { finish(); return }
         val view = web ?: run { finish(); return }
+        if (!snesOnly && view.url?.endsWith("/snes.html") == true) { view.loadUrl(PAGE); return }
         view.evaluateJavascript("""
             (() => {
                 const editor = document.getElementById('editor');

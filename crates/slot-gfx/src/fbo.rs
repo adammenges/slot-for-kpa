@@ -177,6 +177,10 @@ impl Compositor {
         Ok(())
     }
 
+    pub fn upload_game_sized(&mut self, xrgb8888: &[u8], size: (u32, u32)) {
+        self.game.upload_sized(xrgb8888, size);
+    }
+
     pub fn upload_game(&mut self, xrgb8888: &[u8]) {
         self.game.upload(xrgb8888);
     }

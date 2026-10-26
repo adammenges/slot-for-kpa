@@ -163,6 +163,7 @@ void main() {
     bool inside = all(greaterThanEqual(uv, u_pic.xy)) && all(lessThan(uv, u_pic.zw));
 
     if (!inside) {
+        c = vec3(0.0);
     } else if (u_mode > 11.5) {
         // Themaister sharp-bilinear: automatic prescale=3 at Slot 720x480.
         vec2 texel=uv*u_src;

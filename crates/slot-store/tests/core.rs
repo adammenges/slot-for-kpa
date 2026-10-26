@@ -256,3 +256,17 @@ fn the_first_default_frees_carts_that_only_recorded_mgba() {
     assert_eq!(core_for_platform(d.path(), "Zelda", Platform::Gb), Core::Gambatte);
     assert_eq!(core_for_platform(d.path(), "Emerald", Platform::Gba), Core::Gpsp);
 }
+
+#[test]
+fn snes_uses_its_own_core_even_with_stale_game_boy_preferences() {
+    let d = tempfile::tempdir().unwrap();
+    assert_eq!(Core::default_for(Platform::Snes), Core::Snes9x);
+    for core in Core::ALL {
+        assert_eq!(core.runs(Platform::Snes), core == Core::Snes9x);
+    }
+    slot_store::write_selected_core(d.path(), "Mario", Core::Gambatte).unwrap();
+    assert_eq!(slot_store::core_for_platform(d.path(), "Mario", Platform::Snes), Core::Snes9x);
+    assert!(Platform::Snes.accepts(std::path::Path::new("Mario.SFC")));
+    assert!(Platform::Snes.accepts(std::path::Path::new("Mario.smc")));
+    assert!(!Platform::Gba.accepts(std::path::Path::new("Mario.sfc")));
+}

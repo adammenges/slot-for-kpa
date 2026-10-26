@@ -3,7 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 NDK="${ANDROID_NDK_HOME:-${ANDROID_SDK_ROOT:?Set ANDROID_NDK_HOME or ANDROID_SDK_ROOT}/ndk/27.2.12479018}"
-LLVM="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+LLVM="$(echo "$NDK"/toolchains/llvm/prebuilt/*/bin)"
 [ -x "$LLVM/aarch64-linux-android31-clang" ] || {
   echo "Android NDK 27 arm64 compiler not found in $LLVM" >&2; exit 1;
 }

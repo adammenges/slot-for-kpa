@@ -105,6 +105,8 @@ pub trait RetroCore: Send {
     fn set_option(&mut self, _key: &str, _value: &str) {}
     fn set_frame_skip(&mut self, _skip: bool) {}
     fn video_xrgb8888(&self) -> &[u8];
+    /// Dimensions of the current packed XRGB frame (including the legacy GB margins).
+    fn video_size(&self) -> (u32, u32) { (GBA_W, GBA_H) }
     fn take_audio(&mut self) -> Vec<i16>;
     /// Drop speculative audio without moving the core's output buffer.
     fn discard_audio(&mut self) { let _ = self.take_audio(); }

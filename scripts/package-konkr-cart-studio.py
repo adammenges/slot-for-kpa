@@ -27,12 +27,23 @@ def package(root: Path, built: Path):
     for name in ("slot_cart_studio.js", "slot_cart_studio_bg.wasm"):
         shutil.copy2(built / "pkg" / name, target / "pkg" / name)
     shutil.copy2(root / "android/studio/android-card.js", target / "android-card.js")
+    shutil.copy2(root / "android/studio/snes.html", target / "snes.html")
+    shutil.copy2(root / "crates/slot-ui/assets/snes_cart.svg", target / "snes_cart.svg")
     # Only the Android-packaged web app gets compact embedded CSS.
     shutil.copy2(root / "android/studio/embedded.css", target / "embedded.css")
 
     jsfile = target / "studio.js"
     js = jsfile.read_text("utf-8")
     js = "import { fromAndroid } from './android-card.js';\n" + js
+    js += """
+if (window.AndroidStudio && JSON.parse(AndroidStudio.session()).carts.some(c => c.platform === 'SNES')) {
+  const link = document.createElement('a');
+  link.href = 'snes.html'; link.textContent = 'SNES cartridges';
+  link.style.cssText = 'position:fixed;bottom:16px;left:20px;z-index:20;padding:12px 18px;background:#eee9df;color:#222;border-radius:8px;font:16px sans-serif';
+  document.body.append(link);
+}
+"""
+
     js = checked_replace(js, "  const crc = new Crc32();",
                          "  if (file.slotCrc != null) return file.slotCrc >>> 0;\n  const crc = new Crc32();")
     # Keep Android's opaque per-ROM identifier on the official cart objects;

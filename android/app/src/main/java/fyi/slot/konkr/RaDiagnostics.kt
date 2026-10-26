@@ -119,15 +119,16 @@ internal object RaDiagnostics {
             }
         }
 
-        val totalByConsole = hashMapOf(4 to 0, 5 to 0, 6 to 0)
-        val indexedByConsole = hashMapOf(4 to 0, 5 to 0, 6 to 0)
-        val cachedByConsole = hashMapOf(4 to 0, 5 to 0, 6 to 0)
+        val totalByConsole = hashMapOf(3 to 0, 4 to 0, 5 to 0, 6 to 0)
+        val indexedByConsole = hashMapOf(3 to 0, 4 to 0, 5 to 0, 6 to 0)
+        val cachedByConsole = hashMapOf(3 to 0, 4 to 0, 5 to 0, 6 to 0)
         val discovered = HashMap<String, Int>()
         if (games != null) {
             for (i in 0 until games.length().coerceAtMost(5000)) {
                 val item = games.optJSONObject(i) ?: continue
                 val console = when (item.optString("platform")) {
                     "GB" -> 4
+                    "SNES" -> 3
                     "GBA" -> 5
                     "GBC" -> 6
                     else -> continue

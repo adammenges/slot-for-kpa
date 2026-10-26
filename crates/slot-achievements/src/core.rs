@@ -114,6 +114,7 @@ impl RetroCore for Tracked {
     fn set_frame_skip(&mut self, skip: bool) {
         self.core.set_frame_skip(skip);
     }
+    fn video_size(&self) -> (u32, u32) { self.core.video_size() }
     fn video_xrgb8888(&self) -> &[u8] {
         self.core.video_xrgb8888()
     }

@@ -43,11 +43,11 @@ pub fn gambatte_palette(mgba: &str) -> Option<&'static str> {
 }
 
 fn other_core(which: Core, platform: Platform) -> Option<Core> {
-    if platform == Platform::Gba { return None; }
+    if !platform.is_game_boy() { return None; }
     match which {
         Core::Mgba => Some(Core::Gambatte),
         Core::Gambatte => Some(Core::Mgba),
-        Core::Gpsp => None,
+        Core::Gpsp | Core::Snes9x => None,
     }
 }
 

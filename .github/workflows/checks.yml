@@ -6,6 +6,12 @@ on:
       - 'android/**'
       - 'crates/slot-android/**'
       - 'crates/slot-gfx/**'
+      - 'crates/slot-retro/**'
+      - 'crates/slot-store/**'
+      - 'crates/slot-ui/**'
+      - 'crates/slot-achievements/**'
+      - 'cores/**'
+      - 'scripts/**'
       - '.github/workflows/checks.yml'
       - 'tools/**'
   workflow_dispatch:
@@ -44,6 +50,12 @@ jobs:
           grep -F 'test presentation_probe::tests::reports_do_not_rejuvenate_frames_waiting_for_presentation ... ok' "$RUNNER_TEMP/session-tests.log"
       - name: Test libretro and RetroAchievements contracts
         run: cargo test --locked -p slot-retro -p slot-achievements --lib
+      - name: Test cartridge routing and graphics
+        run: |
+          cargo test --locked -p slot-store -p slot-power
+          cargo test --locked -p slot-ui --test cart_material --test mixed_shelf_parity --test native_density
+      - name: Test real Snes9x with generated NTSC and PAL cartridges
+        run: bash scripts/test-snes9x.sh
       - name: Test capture tools and report parsers
         run: |
           bash -n tools/retroarch-parity/capture_pair.sh

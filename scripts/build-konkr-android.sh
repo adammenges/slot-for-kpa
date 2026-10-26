@@ -20,6 +20,9 @@ fi
 if [ ! -f android/app/src/main/jniLibs/arm64-v8a/libgambatte_libretro.so ]; then
   bash scripts/build-gambatte-android.sh
 fi
+if [ ! -f android/app/src/main/jniLibs/arm64-v8a/libsnes9x_libretro.so ]; then
+  bash scripts/build-snes9x-android.sh
+fi
 # Even local builds must use the exact upstream Slot keycaps, not the
 # generic Android font. The same exporter is verified by CI.
 cargo run --locked -p slot-ui --example export_apps_legend -- \
@@ -45,7 +48,7 @@ if [ "${SLOT_NATIVE_STRIP:-1}" = "1" ]; then
     echo "Could not locate Android NDK llvm-strip at $NDK_ROOT" >&2
     exit 1
   fi
-  for lib in slot_android mgba_libretro gpsp_libretro gambatte_libretro; do
+  for lib in slot_android mgba_libretro gpsp_libretro gambatte_libretro snes9x_libretro; do
     native="android/app/src/main/jniLibs/arm64-v8a/lib${lib}.so"
     [ -s "$native" ] || { echo "Native library missing: $native" >&2; exit 1; }
     before="$(wc -c < "$native" | tr -d ' ')"

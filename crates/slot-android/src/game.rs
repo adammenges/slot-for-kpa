@@ -196,6 +196,7 @@ pub struct GameSession {
     frame_count: u32,
     // Presentation-only pixels from speculative frames; save/RA keep the real state.
     runahead_video: Vec<u8>,
+    runahead_size: (u32, u32),
     // Preserve the libretro state allocation across speculative frames.
     runahead_state: Vec<u8>,
     runahead_unavailable: bool,
@@ -240,6 +241,10 @@ fn restore_solo_checkpoint_to_core(core: &mut dyn RetroCore,
 /// Preserve original Slot turbo in TURBO mode; in A/B mode Y acts as A
 /// and X as B, *in addition to* both original buttons. Applied equally to
 /// real and speculative Run-Ahead frames so input prediction never diverges.
+fn system_buttons(core: Core, buttons: ButtonMask, turbo: bool, frame: u32) -> ButtonMask {
+    if core == Core::Snes9x { buttons } else { xy_buttons(buttons, turbo, frame) }
+}
+
 fn xy_buttons(buttons: ButtonMask, turbo: bool, frame: u32) -> ButtonMask {
     if turbo { return buttons.turbo(frame); }
     let mut mapped = buttons.without_turbo().0;
@@ -435,7 +440,7 @@ impl GameSession {
             .map_err(|e| e.to_string())?;
         // Exact upstream Slot libretro options for colour and Game Boy palettes.
         // Read only the 336-byte header: never read the entire cached ROM.
-        let dmg_only = platform != Platform::Gba && which != Core::Gpsp
+        let dmg_only = platform.is_game_boy() && which != Core::Gpsp
             && std::fs::File::open(rom).and_then(|mut file| {
                 let mut header = [0u8; 0x150];
                 file.read_exact(&mut header)?;
@@ -485,6 +490,11 @@ impl GameSession {
                 core.set_option("gpsp_color_correction",
                     if colour_correction { "enabled" } else { "disabled" });
             }
+            Core::Snes9x => {
+                core.set_option("snes9x_overscan", "auto");
+                core.set_option("snes9x_aspect", "4:3");
+                core.set_option("snes9x_up_down_allowed", "disabled");
+            }
             Core::Gambatte => {
                 // Same choices as mGBA: the GB/GBC boot ROM when the user
                 // supplied one, GBC colours for DMG carts unless a Slot
@@ -507,7 +517,7 @@ impl GameSession {
         // memory reads. GB=4 / GBA=5 / GBC=6 use their own libretro maps.
         // Speculative frames never reach it (including GB/GBC Run-Ahead).
         let console = match platform {
-            Platform::Gb => 4, Platform::Gba => 5, Platform::Gbc => 6,
+            Platform::Gb => 4, Platform::Gba => 5, Platform::Gbc => 6, Platform::Snes => 3,
         };
         // Second-instance Run-Ahead boots its copy from these, solo only.
         let runahead_secondary_spec = linked_boot.is_none().then(|| crate::runahead_secondary::Spec {
@@ -716,7 +726,7 @@ impl GameSession {
             save, rtc, manual_export_prefix, state, retroarch_export, ring,
             rewind: RewindThread::spawn(REWIND_BYTES), rewind_frames: 0,
             frame_count: 0, palette_live, core_kind: which,
-            runahead_video: Vec::new(), runahead_state: Vec::new(),
+            runahead_video: Vec::new(), runahead_size: (240, 160), runahead_state: Vec::new(),
             runahead_unavailable: false,
             runahead_rollback_failed: false,
             runahead_discard_confirm: false,
@@ -747,7 +757,7 @@ impl GameSession {
         self.runahead_video.clear();
         if self.link.is_none() && !self.preempt_before_frame(buttons, turbo) { return false; }
         let pressed = ButtonMask(buttons);
-        let mapped = xy_buttons(pressed, turbo, self.frame_count);
+        let mapped = system_buttons(self.core_kind, pressed, turbo, self.frame_count);
         let core_started = Instant::now();
         let advanced = if let Some(link) = self.link.as_mut() {
             matches!(link.frame(self.core.as_mut(), mapped), LinkFrame::Advanced)
@@ -819,7 +829,7 @@ impl GameSession {
                     return Err("gpSP did not register GBA serial/RFU netpacket callbacks".into());
                 }
             }
-            Core::Gambatte => return Err("Gambatte has no Slot Link support".into()),
+            Core::Gambatte | Core::Snes9x => return Err("This core has no Slot Link support".into()),
         }
         let link = LinkPlay::begin(self.core.as_mut(), role, mode, transport)?;
         self.link = Some(link);
@@ -1139,13 +1149,14 @@ impl GameSession {
         // sample its own future phase; reusing one mask for all offsets
         // predicts incorrect key presses across a three-frame boundary.
         for future in 0..frames {
-            let mapped = xy_buttons(pressed, turbo,
+            let mapped = system_buttons(self.core_kind, pressed, turbo,
                 self.frame_count.wrapping_add(u32::from(future)));
             self.core.run_speculative_frame(mapped);
             // Discard predicted audio without reallocating libretro's buffer.
             self.core.discard_audio();
         }
         self.runahead_video.extend_from_slice(self.core.video_xrgb8888());
+        self.runahead_size = self.core.video_size();
         let speculative_us = predicted.elapsed().as_micros() as u64;
         let restore_started = Instant::now();
         let restored = self.core.restore_speculative_state(&self.runahead_state)
@@ -1213,7 +1224,7 @@ impl GameSession {
         // its own future phase, exactly like the single-instance path.
         let mut inputs = [ButtonMask::default(); 2];
         for future in 0..usize::from(frames) {
-            inputs[future] = xy_buttons(pressed, turbo,
+            inputs[future] = system_buttons(self.core_kind, pressed, turbo,
                 self.frame_count.wrapping_add(future as u32));
         }
         let copy = self.runahead_secondary.as_deref_mut().expect("booted above");
@@ -1230,6 +1241,7 @@ impl GameSession {
                 return false;
             }
         }
+        self.runahead_size = copy.video_size();
         let speculative_us = predicted.elapsed().as_micros() as u64;
         self.runahead_probe.calls = self.runahead_probe.calls.saturating_add(1);
         self.runahead_probe.second_instance_calls =
@@ -1277,7 +1289,7 @@ impl GameSession {
                 if k > 0 { replayed = self.core.serialize_into(self.preempt.state_mut(k)); }
                 if replayed.is_err() { break; }
                 self.core.run_speculative_frame(
-                    xy_buttons(pressed, turbo, first.wrapping_add(k as u32)));
+                    system_buttons(self.core_kind, pressed, turbo, first.wrapping_add(k as u32)));
                 self.core.discard_audio();
             }
             let elapsed_us = started.elapsed().as_micros() as u64;
@@ -1375,6 +1387,7 @@ impl GameSession {
 
     pub fn set_colour_correction(&mut self, enabled: bool) {
         let (key, value) = match self.core_kind {
+            Core::Snes9x => return,
             Core::Mgba => ("mgba_color_correction",
                 if enabled { "Auto" } else { "OFF" }),
             Core::Gpsp => ("gpsp_color_correction",
@@ -1391,6 +1404,10 @@ impl GameSession {
 
     pub fn rewind_fill(&self) -> u8 {
         self.rewind.fill()
+    }
+
+    pub fn frame_size(&self) -> (u32, u32) {
+        if !self.runahead_video.is_empty() { self.runahead_size } else { self.core.video_size() }
     }
 
     pub fn frame(&self) -> &[u8] {
@@ -1589,12 +1606,12 @@ impl GameSession {
         }
     }
     /// Original Slot ring: 10 timestamped states per ROM/core, each with
-    /// a 240×160 PNG thumbnail. Independent from RetroArch's manual slots.
+    /// a PNG thumbnail at the current video resolution. Independent from RetroArch's manual slots.
     pub fn save_manual(&mut self) -> Result<String, String> {
         if self.runahead_rollback_failed { return Err("Unsafe Run-Ahead state; manual save blocked".into()); }
         if self.link_touched || self.linked_boot.is_some() { return Err("Save States unavailable for Multiplayer sessions".into()); }
         let state = self.core.serialize().map_err(|e|e.to_string())?;
-        let preview = thumb::png(self.core.video_xrgb8888()).unwrap_or_default();
+        let preview = thumb::png_sized(self.core.video_xrgb8888(), self.core.video_size()).unwrap_or_default();
         let entries = self.ring.list().map_err(|e|e.to_string())?;
         let mut seconds = slot_store::parse_stamp(&stamp_now()).ok_or("Invalid system clock")?;
         let mut stamp = format_stamp(seconds);

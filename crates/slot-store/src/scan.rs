@@ -69,6 +69,7 @@ pub fn scan(root: &Path) -> Result<Vec<Cart>, StoreError> {
                 .join(platform.dir_name())
                 .join(format!("{stem}.png"));
             let (title, code) = match platform {
+                Platform::Snes => (String::new(), String::new()),
                 Platform::Gba => (
                     header_title(&rom).unwrap_or_default(),
                     header_code(&rom).unwrap_or_default(),

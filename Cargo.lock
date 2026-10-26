@@ -1884,6 +1884,7 @@ name = "slot-retro"
 version = "0.1.0"
 dependencies = [
  "libloading",
+ "tempfile",
 ]
 
 [[package]]

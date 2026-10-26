@@ -14,6 +14,7 @@ pub struct GamePass {
     context_lost: bool,
     prog: gl::types::GLuint,
     game: gl::types::GLuint,
+    size: (u32, u32),
     // Reuse the Android GLES2-compatible RGBA staging pixels each frame.
     // The old per-frame flat_map().collect() allocated ~150 KiB at 60 Hz.
     #[cfg(target_os = "android")]
@@ -21,6 +22,7 @@ pub struct GamePass {
     u_rect: gl::types::GLint,
     u_bright: gl::types::GLint,
     u_uv: gl::types::GLint,
+    u_src: gl::types::GLint,
     u_mode: gl::types::GLint,
     u_colour_correct: gl::types::GLint,
     colour_correct: bool,
@@ -67,12 +69,13 @@ impl GamePass {
         let format = gl::BGRA;
         let game = crate::gl::texture(SRC_W, SRC_H, gl::NEAREST, gl::CLAMP_TO_EDGE, format, None);
         let paper = crate::gl::texture(1, 1, gl::NEAREST, gl::REPEAT, gl::RGBA, Some(&[255; 4]));
-        let (u_rect, u_bright, u_uv, u_mode, u_paper_size, u_pic, u_fbo, u_colour_correct);
+        let (u_rect, u_bright, u_uv, u_src, u_mode, u_paper_size, u_pic, u_fbo, u_colour_correct);
         unsafe {
             gl::UseProgram(prog);
             gl::Uniform1i(crate::gl::uniform_location(prog, "u_game"), 0);
+            u_src = crate::gl::uniform_location(prog, "u_src");
             gl::Uniform2f(
-                crate::gl::uniform_location(prog, "u_src"),
+                u_src,
                 SRC_W as f32,
                 SRC_H as f32,
             );
@@ -95,11 +98,13 @@ impl GamePass {
             context_lost: false,
             prog,
             game,
+            size: (SRC_W, SRC_H),
             #[cfg(target_os = "android")]
             rgba_upload: vec![0; (SRC_W * SRC_H * 4) as usize],
             u_rect,
             u_bright,
             u_uv,
+            u_src,
             u_mode,
             u_colour_correct,
             colour_correct: false,
@@ -150,8 +155,25 @@ impl GamePass {
     }
 
     pub fn upload(&mut self, xrgb8888: &[u8]) {
-        if xrgb8888.len() < (SRC_W * SRC_H * 4) as usize {
+        self.upload_sized(xrgb8888, (SRC_W, SRC_H));
+    }
+
+    pub fn upload_sized(&mut self, xrgb8888: &[u8], size: (u32, u32)) {
+        let (width, height) = size;
+        if width == 0 || height == 0 || width > 2048 || height > 2048
+            || xrgb8888.len() < (width * height * 4) as usize {
             return;
+        }
+        if self.size != size {
+            unsafe { gl::DeleteTextures(1, &self.game); }
+            #[cfg(target_os = "android")]
+            let format = gl::RGBA;
+            #[cfg(not(target_os = "android"))]
+            let format = gl::BGRA;
+            self.game = crate::gl::texture(width, height, gl::NEAREST, gl::CLAMP_TO_EDGE, format, None);
+            self.size = size;
+            #[cfg(target_os = "android")]
+            self.rgba_upload.resize((width * height * 4) as usize, 0);
         }
         #[cfg(target_os = "android")]
         {
@@ -181,8 +203,8 @@ impl GamePass {
                 0,
                 0,
                 0,
-                SRC_W as i32,
-                SRC_H as i32,
+                width as i32,
+                height as i32,
                 format,
                 gl::UNSIGNED_BYTE,
                 pixels as *const std::ffi::c_void,
@@ -192,7 +214,7 @@ impl GamePass {
 
     pub fn draw(&self, quad: &Quad) {
         let src = match self.effect {
-            ScreenEffect::Grid => whole_scale_source(self.src, self.fbo_scale),
+            ScreenEffect::Grid if self.size == (SRC_W, SRC_H) => whole_scale_source(self.src, self.fbo_scale),
             _ => self.src,
         };
         self.draw_source(self.game, quad, src);
@@ -206,6 +228,7 @@ impl GamePass {
         let (x, y, w, h) = screen_rect(self.power);
         unsafe {
             gl::UseProgram(self.prog);
+            gl::Uniform2f(self.u_src, self.size.0 as f32, self.size.1 as f32);
             gl::Uniform4f(self.u_rect, x, y, w, h);
             gl::Uniform4f(self.u_uv, src[0], src[1], src[2], src[3]);
             gl::Uniform1f(self.u_bright, screen_brightness(self.power));

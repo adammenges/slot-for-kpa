@@ -723,6 +723,7 @@ class MainActivity : Activity() {
                 val core = when (payload.getString("core")) {
                     "gpsp" -> "gpSP"
                     "gambatte" -> "Gambatte"
+                    "snes9x" -> "Snes9x"
                     else -> "mGBA"
                 }
                 val target = activeTargets[uri]
@@ -1329,7 +1330,7 @@ class MainActivity : Activity() {
                         RomSource.inspect(input, name).extension
                     } ?: error("Cannot inspect cartridge ZIP")
                 } else name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT)
-                require(ext in setOf("gba", "gbc", "gb")) { "Unsupported ROM type" }
+                require(ext in setOf("gba", "gbc", "gb", "sfc", "smc")) { "Unsupported ROM type" }
                 val digest = MessageDigest.getInstance("SHA-256")
                     .digest(rawUri.toByteArray(Charsets.UTF_8))
                     .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
@@ -1364,8 +1365,9 @@ class MainActivity : Activity() {
                 val romReadyAt = SystemClock.elapsedRealtime()
                 val savedCore = nativeCoreForUri(rawUri)
                 val core = when {
+                    ext in setOf("sfc", "smc") -> "Snes9x"
                     savedCore == "gpsp" && ext == "gba" -> "gpSP"
-                    savedCore == "gambatte" && ext != "gba" -> "Gambatte"
+                    savedCore == "gambatte" && ext in setOf("gb", "gbc") -> "Gambatte"
                     else -> "mGBA"
                 }
                 val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)

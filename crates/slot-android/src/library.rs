@@ -56,8 +56,8 @@ pub fn next_populated(current: usize, direction: i32, count: &[usize]) -> usize 
     current
 }
 
-pub fn carts_by_platform(entries: &[RomEntry]) -> [Vec<Cart>; 3] {
-    let mut groups: [Vec<Cart>; 3] = std::array::from_fn(|_| Vec::new());
+pub fn carts_by_platform(entries: &[RomEntry]) -> [Vec<Cart>; 4] {
+    let mut groups: [Vec<Cart>; 4] = std::array::from_fn(|_| Vec::new());
     for entry in entries.iter().take(MAX_ROMS) {
         if entry.title.trim().is_empty() || !entry.uri.starts_with("content://") {
             continue;
@@ -66,10 +66,11 @@ pub fn carts_by_platform(entries: &[RomEntry]) -> [Vec<Cart>; 3] {
             "GBA" => (Platform::Gba, 0),
             "GB" => (Platform::Gb, 1),
             "GBC" => (Platform::Gbc, 2),
+            "SNES" => (Platform::Snes, 3),
             _ => continue,
         };
         let shell = match platform {
-            Platform::Gba => None,
+            Platform::Gba | Platform::Snes => None,
             Platform::Gb | Platform::Gbc => {
                 // Cart Studio and the shelf must resolve the same automatic
                 // per-game shell, even for SAF content URIs and zipped ROMs.
@@ -184,7 +185,7 @@ mod tests {
             example("GBA", "Advance Wars", "content://roms/a"),
             example("GBA", "Not a ROM", "/storage/emulated/0/ROMs/foo.gba"),
             example("GBC", "Color Game", "content://roms/c"),
-            example("SNES", "Ignored", "content://roms/s"),
+            example("NES", "Ignored", "content://roms/s"),
         ]);
         assert_eq!(grouped[0].len(), 2);
         assert_eq!(grouped[0][0].stem, "Advance Wars");

@@ -108,6 +108,10 @@ jobs:
         run: |
           export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
           bash scripts/build-gambatte-android.sh
+      - name: Build Snes9x arm64 libretro core
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/27.2.12479018"
+          bash scripts/build-snes9x-android.sh
       - name: Checkout official Slot revision required by Cart Studio
         uses: actions/checkout@v4
         with:
@@ -189,7 +193,7 @@ jobs:
           grep -F "package: name='fyi.slot.konkr.diag' versionCode='$VERSION_CODE'" "$RUNNER_TEMP/mac-lab-badging.txt"
           grep -F "versionName='$VERSION_NAME-mac-lab'" "$RUNNER_TEMP/mac-lab-badging.txt"
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify "$APK"
-          for core in slot_android mgba_libretro gpsp_libretro gambatte_libretro; do
+          for core in slot_android mgba_libretro gpsp_libretro gambatte_libretro snes9x_libretro; do
             unzip -Z -1 "$APK" | grep -Fx "lib/arm64-v8a/lib${core}.so"
           done
           unzip -Z -1 "$APK" | grep -Fx 'assets/studio/pkg/slot_cart_studio_bg.wasm'
@@ -215,7 +219,7 @@ jobs:
           grep -F "versionName='$VERSION_NAME'" "$RUNNER_TEMP/konkr-badging.txt"
           "$ANDROID_SDK_ROOT/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK" |
             grep -Fi '4f42b8f0ac98f6a0102804ab51020ea0e7e2de7685c6ce09400a744de0b0fa2f'
-          for core in slot_android mgba_libretro gpsp_libretro gambatte_libretro; do
+          for core in slot_android mgba_libretro gpsp_libretro gambatte_libretro snes9x_libretro; do
             unzip -Z -1 "$APK" | grep -Fx "lib/arm64-v8a/lib${core}.so"
           done
           if unzip -Z -1 "$APK" | grep -Eq '^lib/(x86_64|x86|armeabi-v7a)/'; then
@@ -230,6 +234,11 @@ jobs:
               mgba = json.loads(archive.read("assets/core-build-mgba.json"))
               gpsp = json.loads(archive.read("assets/core-build-gpsp.json"))
               gambatte = json.loads(archive.read("assets/core-build-gambatte.json"))
+              snes9x = json.loads(archive.read("assets/core-build-snes9x.json"))
+              archive.getinfo("assets/licenses/snes9x-LICENSE.txt")
+              archive.getinfo("assets/studio/snes.html")
+          assert snes9x["revision"] == open("cores/snes9x/revision").read().strip()
+          assert "achievement-memory.patch" in snes9x["patches"]
           assert mgba["revision"] == "7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6"
           assert gpsp["revision"] == "5819380c2ffb0900219d700a382ee68c464ebb99"
           assert gambatte["revision"] == "d9d6cd06382d1ced30de34d56d3609452323dab1"

@@ -52,6 +52,7 @@ pub struct Shelf {
     pub scroll: f32,
     faces: Vec<Option<TexId>>,
     shadow: Option<TexId>,
+    snes_shadow: Option<TexId>,
     gb_shadow: Option<TexId>,
     gbc_shadow: Option<TexId>,
     shells: Vec<Option<GbShell>>,
@@ -76,6 +77,7 @@ impl Shelf {
             index: 0,
             scroll: 0.0,
             shadow: None,
+            snes_shadow: None,
             gb_shadow: None,
             gbc_shadow: None,
             ride: 0.0,
@@ -123,6 +125,8 @@ impl Shelf {
     pub fn mark_starred(&mut self, mut is_favorite: impl FnMut(&Cart) -> bool) {
         self.starred = self.carts.iter().map(&mut is_favorite).collect();
     }
+
+    pub fn set_snes_shadow(&mut self, face: TexId) { self.snes_shadow = Some(face); }
 
     pub fn set_shadow(&mut self, face: TexId) {
         self.shadow = Some(face);
@@ -447,6 +451,7 @@ impl Shelf {
             let x = x + shake;
             let y = foot_y(ch as f32) - h;
             let backing = match self.shells.get(i).copied().flatten() {
+                None if cart.platform == slot_store::Platform::Snes => self.snes_shadow,
                 None => self.shadow,
                 Some(GbShell::Notched) => self.gb_shadow,
                 Some(GbShell::Rounded) => self.gbc_shadow,
@@ -476,6 +481,7 @@ impl Shelf {
             // Faithful original v1.7 pixel-star with label-relative geometry.
             if let (Some(true), Some((tex, sw, sh))) = (self.starred.get(i), self.star) {
                 let (lx, ly, lw) = match cart.platform {
+                    slot_store::Platform::Snes => (66.0, 54.0, 228.0),
                     slot_store::Platform::Gba => {
                         let (x,y,right,_) = label_panel(cw,ch);
                         (x as f32,y as f32,(right-x) as f32)

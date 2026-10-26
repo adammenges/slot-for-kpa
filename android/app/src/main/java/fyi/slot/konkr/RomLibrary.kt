@@ -52,7 +52,7 @@ internal object RomLibrary {
 
     /** ZIP files containing GB, GBC or GBA cartridges are supported too. */
     internal fun isSupportedRomExtension(extension: String): Boolean =
-        extension.lowercase(Locale.ROOT) in setOf("gba", "gb", "gbc", "zip")
+        extension.lowercase(Locale.ROOT) in setOf("gba", "gb", "gbc", "sfc", "smc", "zip")
 
     /**
      * Re-scan the selected tree, but avoid re-opening every ROM header when
@@ -157,7 +157,7 @@ internal object RomLibrary {
                         old.optLong("modified", -1), title, size, modified) &&
                         // Old indexes lack the GB header metadata used by
                         // Cart Studio. Read only 0x150 bytes once to migrate.
-                        (old.optString("platform") == "GBA" || old.has("gb_cgb_flag"))
+                        (old.optString("platform") in setOf("GBA", "SNES") || old.has("gb_cgb_flag"))
                     // ZIP archives remain a single shelf cartridge identified
                     // by the ZIP's SAF URI and filename. Resolve the embedded
                     // ROM header/extension only on cache misses.
@@ -177,11 +177,13 @@ internal object RomLibrary {
                     if (zipped && !reuse && zipHeader == null) continue
                     val embeddedExtension = zipHeader?.extension
                         ?: if (zipped) when (old?.optString("platform")) {
+                            "SNES" -> "sfc"
                             "GBA" -> "gba"
                             "GBC" -> "gbc"
                             else -> "gb"
                         } else extension
                     val gba = embeddedExtension == "gba"
+                    val snes = embeddedExtension in setOf("sfc", "smc")
                     var code: String
                     var colorOnly: Boolean
                     var platform: String
@@ -204,7 +206,7 @@ internal object RomLibrary {
                         // Use the exact Nintendo GB header fields read by
                         // Cart Studio's automatic shell selector. Never infer
                         // colours from the ROM filename or download artwork.
-                        if (!gba && header.size >= 0x14b) {
+                        if (!gba && !snes && header.size >= 0x14b) {
                             gbTitle = String(header, 0x134, 11, Charsets.US_ASCII)
                                 .substringBefore('\u0000').trim()
                             gbCode = String(header, 0x13f, 4, Charsets.US_ASCII)
@@ -218,12 +220,13 @@ internal object RomLibrary {
                                 .takeIf { it.all { c -> c in 'A'..'Z' || c in '0'..'9' } }
                                 ?: ""
                         } else ""
-                        colorOnly = !gba && (embeddedExtension == "gbc" ||
+                        colorOnly = !gba && !snes && (embeddedExtension == "gbc" ||
                             (header.size > 0x143 && (header[0x143].toInt() and 0xff) == 0xc0))
                         val container = dir.folder.lowercase(Locale.ROOT)
-                        val gbColor = !gba && (embeddedExtension == "gbc" || colorOnly ||
+                        val gbColor = !gba && !snes && (embeddedExtension == "gbc" || colorOnly ||
                             container == "gbc" || container == "game boy color")
                         platform = when {
+                            snes -> "SNES"
                             gba -> "GBA"
                             gbColor -> "GBC"
                             else -> "GB"
@@ -238,7 +241,7 @@ internal object RomLibrary {
                         .put("color_only", colorOnly)
                         .put("size", size)
                         .put("modified", modified)
-                    if (!gba) {
+                    if (!gba && !snes) {
                         game.put("gb_title", gbTitle)
                             .put("gb_code", gbCode)
                             .put("gb_japan", gbJapan)

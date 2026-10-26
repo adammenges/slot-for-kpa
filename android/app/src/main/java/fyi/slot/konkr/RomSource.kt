@@ -19,7 +19,7 @@ internal object RomSource {
     const val MAX_ROM_BYTES: Long = 64L * 1024 * 1024
     const val MIN_ROM_BYTES = 0x150
     private const val MAX_ENTRIES = 256
-    private val supported = setOf("gba", "gbc", "gb")
+    private val supported = setOf("gba", "gbc", "gb", "sfc", "smc")
 
     data class Header(val extension: String, val bytes: ByteArray)
 
@@ -72,7 +72,7 @@ internal object RomSource {
                 // warming, artwork/RA fingerprints and emulator launch.
                 return@use operation(Limited(zip), romExt)
             }
-            throw IllegalArgumentException("ZIP does not contain a GB, GBC or GBA ROM")
+            throw IllegalArgumentException("ZIP does not contain a supported ROM")
         }
     }
 

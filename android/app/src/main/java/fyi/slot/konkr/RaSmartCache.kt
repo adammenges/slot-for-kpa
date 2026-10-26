@@ -33,7 +33,16 @@ internal object RaSmartCache {
         val digest = MessageDigest.getInstance("MD5") // RA's ROM identity, not for security
         var consumed = 0L
         context.contentResolver.openInputStream(uri)?.use { source ->
-            RomSource.useRom(source, filename) { input, _ ->
+            RomSource.useRom(source, filename) { input, extension ->
+                if (extension in setOf("sfc", "smc")) {
+                    // SNES needs total uncompressed size to detect copier headers.
+                    val bytes = input.readBytes()
+                    require(bytes.size in 0x150..MAX_ROM_BYTES.toInt())
+                    val offset = if (bytes.size % 0x2000 == 512) 512 else 0
+                    digest.update(bytes, offset, bytes.size - offset)
+                    consumed = bytes.size.toLong()
+                    return@useRom
+                }
                 val buffer = ByteArray(64 * 1024)
                 while (true) {
                     if (Thread.currentThread().isInterrupted) throw InterruptedException()
@@ -119,6 +128,7 @@ internal object RaSmartCache {
             val item = entries.optJSONObject(i) ?: continue
             val console = when (item.optString("platform")) {
                 "GB" -> 4
+                "SNES" -> 3
                 "GBA" -> 5
                 "GBC" -> 6
                 else -> continue

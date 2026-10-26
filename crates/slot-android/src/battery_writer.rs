@@ -119,8 +119,11 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn root() -> PathBuf {
+        // macOS wall clocks can give parallel tests the same nanosecond stamp.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let id = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let p = std::env::temp_dir().join(format!("slot-battery-f7-{}-{id}", std::process::id()));
+        let p = std::env::temp_dir().join(format!("slot-battery-f7-{}-{id}-{serial}", std::process::id()));
         fs::create_dir_all(&p).unwrap();
         p
     }

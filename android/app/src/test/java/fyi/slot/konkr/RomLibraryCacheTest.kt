@@ -6,7 +6,7 @@ import org.junit.Test
 
 class RomLibraryCacheTest {
     @Test fun scanAcceptsSupportedExtensionsIndependentOfParentFolder() {
-        for (ext in listOf("gba", "gb", "gbc", "zip", "GBA", "GBC", "ZIP")) {
+        for (ext in listOf("gba", "gb", "gbc", "zip", "GBA", "GBC", "ZIP", "sfc", "smc", "SFC", "SMC")) {
             assertTrue(RomLibrary.isSupportedRomExtension(ext))
         }
         for (ext in listOf("ps2", "psp", "7z", "sav", "")) {

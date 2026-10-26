@@ -78,3 +78,22 @@ fn u1_clear_material_is_drawn_in_exact_original_slot_depth_order() {
         Draw::Tex{tex,..}=>Some(*tex),_=>None,
     }).collect::<Vec<_>>(),vec![labels[0]]);
 }
+
+#[test]
+fn snes_cartridge_has_its_own_shape_label_and_dense_pixels() {
+    let mut cart = cartridge("", "SNES Probe");
+    cart.platform = Platform::Snes;
+    for scale in [1.0, 4.0 / 3.0] {
+        slot_ui::density::with_scale(scale, || {
+            let face = cart_face_with_material(&cart, None);
+            assert_eq!((face.w, face.h), (360, 240));
+            assert_eq!(slot_ui::label_size(&cart), (228, 138));
+            let (w, h) = slot_ui::density::texels(face.w, face.h, face.rgba.len());
+            assert_eq!((w, h), ((360.0 * scale).round() as u32, (240.0 * scale).round() as u32));
+            let shadow = slot_ui::snes_cart_shadow();
+            assert_eq!(shadow.rgba.len(), face.rgba.len());
+            assert_eq!(face.rgba[3], 0, "corners outside the shell stay transparent");
+            assert!(face.rgba.chunks_exact(4).any(|p| p[3] == 255));
+        });
+    }
+}

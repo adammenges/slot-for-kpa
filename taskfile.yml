@@ -22,6 +22,11 @@ tasks:
     cmds:
       - cargo test -p slot-android --features runtime-tests --lib {{.FILTER}}
 
+  test:snes:
+    desc: Build pinned Snes9x and test original NTSC, PAL and high-resolution probes
+    cmds:
+      - bash scripts/test-snes9x.sh
+
   test:tools:
     desc: Test the capture tools and report parsers
     cmds:

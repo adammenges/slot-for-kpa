@@ -130,6 +130,7 @@ fn session(root: &Path, failure: Failure) -> (GameSession, Arc<Mutex<Calls>>) {
         rewind_frames: 0,
         frame_count: 0,
         runahead_video: vec![],
+        runahead_size: (240, 160),
         runahead_state: vec![],
         runahead_unavailable: false,
         runahead_rollback_failed: false,
@@ -485,4 +486,17 @@ fn pokemon_flash_guard_saves_a_new_game_but_protects_a_complete_save() {
     // An incomplete image must never replace a complete in-game save.
     assert!(game.save_for_eject(false).is_err());
     assert_eq!(std::fs::read(&game.save).unwrap(), complete);
+}
+
+#[test]
+fn snes_buttons_remain_native_in_real_and_predicted_frames() {
+    let root = tempfile::tempdir().unwrap();
+    let (mut game, calls) = session(root.path(), Failure::None);
+    game.core_kind = Core::Snes9x;
+    let buttons = ButtonMask::X | ButtonMask::Y | ButtonMask::L | ButtonMask::R;
+    for turbo in [false, true] {
+        assert!(game.advance(buttons, turbo, false));
+        game.prepare_runahead(buttons, turbo, 2);
+    }
+    assert!(calls.lock().unwrap().predicted.iter().all(|input| *input == buttons));
 }

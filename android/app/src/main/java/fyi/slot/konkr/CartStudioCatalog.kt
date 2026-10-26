@@ -53,7 +53,7 @@ internal object CartStudioCatalog {
             val row = entries.optJSONObject(i) ?: continue
             val uri = row.optString("uri")
             val platform = row.optString("platform")
-            if (!uri.startsWith("content://") || platform !in setOf("GBA", "GB", "GBC")) continue
+            if (!uri.startsWith("content://") || platform !in setOf("GBA", "GB", "GBC", "SNES")) continue
             result.add(Rom(uri, platform, row.optString("title"),
                 row.optLong("size", -1), row.optLong("modified", -1),
                 row.optString("filename")))
@@ -177,6 +177,7 @@ internal object CartStudioCatalog {
         val filename = rom.filename.ifBlank { Uri.parse(rom.uri).lastPathSegment.orEmpty() }
         val fingerprint = RomSource.useRom(content, filename) { input, embeddedExt ->
             require(when (rom.platform) {
+                "SNES" -> embeddedExt in setOf("sfc", "smc")
                 "GBA" -> embeddedExt == "gba"
                 "GB", "GBC" -> embeddedExt in setOf("gb", "gbc")
                 else -> false

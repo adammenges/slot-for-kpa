@@ -82,7 +82,7 @@ enum Shape {
 
 pub fn gb_shell_of(cart: &Cart) -> Option<GbShell> {
     match cart.platform {
-        Platform::Gba => None,
+        Platform::Gba | Platform::Snes => None,
         Platform::Gb | Platform::Gbc => Some(match cart.shell.map(|c| c.outline) {
             Some(Outline::Notched) => GbShell::Notched,
             Some(Outline::Rounded) => GbShell::Rounded,
@@ -133,15 +133,17 @@ const SEATED_H: u32 = 141;
 const GB_SEATED_H: u32 = 259;
 
 pub fn seated_box(platform: Platform) -> (u32, u32) {
+    if platform == Platform::Snes { return (SEATED_W, 160); }
     match platform {
-        Platform::Gba => (SEATED_W, SEATED_H),
+        Platform::Gba | Platform::Snes => (SEATED_W, SEATED_H),
         Platform::Gb | Platform::Gbc => (SEATED_W, GB_SEATED_H),
     }
 }
 
 pub fn cart_box(platform: Platform) -> (u32, u32) {
+    if platform == Platform::Snes { return (360, 240); }
     let s = spec(match platform {
-        Platform::Gba => Shape::Gba,
+        Platform::Gba | Platform::Snes => Shape::Gba,
         Platform::Gb | Platform::Gbc => Shape::Gb(GbShell::Notched),
     });
     (s.w, s.h)
@@ -189,6 +191,7 @@ fn dense_layer(face: CartFace) -> CartFace {
 }
 
 pub fn is_clear(cart: &Cart) -> bool {
+    if cart.platform == Platform::Snes { return false; }
     shell_for(cart).finish != Finish::Solid
 }
 
@@ -233,6 +236,7 @@ pub(crate) fn cut_to_shell(face: &mut CartFace, shell: GbShell) {
 
 /// Logical label size; artwork for `cart_face_with` is `px()` of it.
 pub fn label_size(cart: &Cart) -> (u32, u32) {
+    if cart.platform == Platform::Snes { return (228, 138); }
     let (_, _, lw, lh) = spec(shape_of(cart)).label;
     (lw, lh)
 }
@@ -283,6 +287,7 @@ fn blend_over(dst: &mut [u8], src: &[u8]) {
 }
 
 pub fn cart_face_with(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
+    if cart.platform == Platform::Snes { return snes_face(cart, art); }
     let s = spec(shape_of(cart));
     let mut face = dense_layer(shell_face(&s, &shell_for(cart)));
     let label = match art {
@@ -548,4 +553,31 @@ fn hsv_to_rgb(h: f32, s: f32, v: f32) -> [u8; 3] {
         ((g + m) * 255.0).round() as u8,
         ((b + m) * 255.0).round() as u8,
     ]
+}
+
+/// SNES shells are drawn from vector art at the actual display density.
+fn snes_plastic() -> CartFace {
+    let tree = usvg::Tree::from_str(include_str!("../assets/snes_cart.svg"), &usvg::Options::default()).expect("bundled SNES SVG");
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(px(360), px(240)).unwrap();
+    resvg::render(&tree, resvg::tiny_skia::Transform::from_scale(density::scale(), density::scale()), &mut pixmap.as_mut());
+    let mut rgba = pixmap.data().to_vec();
+    for pixel in rgba.chunks_exact_mut(4) {
+        let a = u32::from(pixel[3]);
+        if a > 0 { for channel in &mut pixel[..3] { *channel = (u32::from(*channel) * 255 / a).min(255) as u8; } }
+    }
+    CartFace { rgba, w: 360, h: 240 }
+}
+
+pub fn snes_cart_shadow() -> CartFace {
+    let mut face = snes_plastic();
+    for pixel in face.rgba.chunks_exact_mut(4) { pixel[..3].fill(0); }
+    face
+}
+
+fn snes_face(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
+    let mut face = snes_plastic();
+    let spec = Spec { w: 360, h: 240, label: (66, 54, 228, 138), mask: &[], mould: Mould::Gba, shell: None };
+    let label = art.unwrap_or_else(|| generated_label(&spec, &label_text(cart)));
+    paste_label(&spec, &mut face, &label);
+    face
 }

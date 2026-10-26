@@ -151,7 +151,7 @@ const NAME: &str = "slot-konkr-settings.json";
 pub enum Shader {
     Off, Lcd3x, Grid, Dot, Simpletex,
     LcdGridV2, LcdGridV2Gba, ZfastLcd, Lcd1x, SimpletexGba,
-    Agb001, Ags001, SharpBilinear,
+    Agb001, Ags001, SharpBilinear, Scanlines,
 }
 impl Shader {
     // Exactly ten GBA RetroArch shaders plus Off, preserving the backward
@@ -163,6 +163,7 @@ impl Shader {
     ];
     // GB/GBC options remain unchanged.
     pub const GB: [Self; 4] = [Self::Off, Self::Lcd3x, Self::Grid, Self::Simpletex];
+    pub const SNES: [Self; 3] = [Self::Off, Self::SharpBilinear, Self::Scanlines];
     pub fn effect(self) -> ScreenEffect {
         match self {
             Self::Off => ScreenEffect::None,
@@ -178,6 +179,7 @@ impl Shader {
             Self::Agb001 => ScreenEffect::Agb001,
             Self::Ags001 => ScreenEffect::Ags001,
             Self::SharpBilinear => ScreenEffect::SharpBilinear,
+            Self::Scanlines => ScreenEffect::Scanlines,
         }
     }
     pub fn includes_gba_color(self) -> bool {
@@ -202,6 +204,7 @@ pub struct Settings {
     pub rumble: bool, pub shader_gba: Shader, pub shader_gb: Shader,
     pub shader_gbc: Shader,
     pub shader_snes: Shader,
+    pub snes_video_mode: crate::video_mode::VideoMode,
     // Retain legacy field for old RC1 Settings.json and old desktop Link code;
     // the three platform fields below are authoritative after migration.
     pub colour_correction_gba: bool,
@@ -247,6 +250,7 @@ impl Default for Settings {
         Self { ff_speed: 2, ff_sound: true, colour_correction: false,
             rumble: true, shader_gba: Shader::Off, shader_gb: Shader::Off,
             shader_gbc: Shader::Off, shader_snes: Shader::Off,
+            snes_video_mode: crate::video_mode::VideoMode::Aspect,
             colour_correction_gba: false, colour_correction_gb: false,
             colour_correction_gbc: false,
             bezel_gba: Bezel::None, bezel_gbc: Bezel::Default, bezel_gb: Bezel::Default,
@@ -414,7 +418,8 @@ impl Settings {
                 !self.colour_correction_gbc),
             24 => self.set_colour_for(slot_store::Platform::Gb,
                 !self.colour_correction_gb),
-            32 => self.shader_snes=self.shader_snes.step(&Shader::GB,right),
+            32 => self.shader_snes=self.shader_snes.step(&Shader::SNES,right),
+            35 => self.snes_video_mode=self.snes_video_mode.step(right),
             21 => self.shader_gbc=self.shader_gbc.step(&Shader::GB,right),
             25 => self.bezel_gba=self.bezel_gba.step(),
             26 => self.bezel_gbc=self.bezel_gbc.step_in(&Bezel::GBC,right),
@@ -1002,5 +1007,31 @@ mod tests {
         assert_eq!(s.bezel_gba,Bezel::Default);
         s.change(25,true);
         assert_eq!(s.bezel_gba,Bezel::None);
+    }
+}
+
+#[cfg(test)]
+mod snes_display_tests {
+    use super::*;
+    use crate::video_mode::{VideoMode,video_mode_with_default,write_video_mode};
+    #[test]
+    fn snes_defaults_roundtrip_without_overwriting_game_or_game_boy_choices() {
+        let mut settings:Settings=serde_json::from_str(r#"{"shader_gb":"grid"}"#).unwrap();
+        assert_eq!(settings.snes_video_mode,VideoMode::Aspect);
+        settings.change(35,true);
+        assert_eq!(settings.snes_video_mode,VideoMode::Stretch);
+        for expected in [Shader::SharpBilinear,Shader::Scanlines,Shader::Off] {
+            assert!(settings.change(32,true)); assert_eq!(settings.shader_snes,expected);
+        }
+        assert_eq!(settings.shader_gb,Shader::Grid);
+        let saved=serde_json::to_string(&settings).unwrap();
+        let restored:Settings=serde_json::from_str(&saved).unwrap();
+        assert_eq!(restored,settings);
+        let root=tempfile::tempdir().unwrap();
+        let mode=|stem,p|video_mode_with_default(root.path(),stem,p,restored.snes_video_mode);
+        assert_eq!(mode("New SNES game",slot_store::Platform::Snes),VideoMode::Stretch);
+        assert_eq!(mode("New GB game",slot_store::Platform::Gb),VideoMode::Actual);
+        write_video_mode(root.path(),"Existing SNES game",VideoMode::Actual).unwrap();
+        assert_eq!(mode("Existing SNES game",slot_store::Platform::Snes),VideoMode::Actual);
     }
 }

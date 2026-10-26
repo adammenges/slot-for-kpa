@@ -1044,7 +1044,7 @@ impl Engine {
                                "SYNC LAB", "1×", "2×", "3×", "5×", "BUILT-IN",
                                "RA CLOCK LAB", "RETROARCH", "NATIVE",
                                "SLOT.", "GAME BOY", "POCKET", "COLOR",
-                               "mGBA", "gpSP", "Gambatte", "Snes9x", "INTEGER", "4:3", "STRETCH"]
+                               "mGBA", "gpSP", "Gambatte", "Snes9x", "INTEGER", "4:3", "STRETCH", "Scanlines"]
             .into_iter().map(|value| {
                 let face = quick_value_face(value, true);
                 let tex = gpu.create_face(&face);
@@ -1399,7 +1399,9 @@ impl Engine {
         let time = self.born.elapsed().as_millis() as u64;
         match code {
             96 | 97 => {
-                let key = if self.current_cart_platform() == Platform::Gba { 0 } else { 1 };
+                let key = match self.current_cart_platform() {
+                    Platform::Gba=>0, Platform::Gb=>1, Platform::Gbc=>21, Platform::Snes=>32,
+                };
                 if self.game.is_some() {
                     self.change_game_screen_or_gameplay(key,code == 96);
                 } else { self.change_setting(key,code == 96); }
@@ -1419,6 +1421,7 @@ impl Engine {
                      crate::settings::Shader::Agb001 => Toast::ShaderAgb001,
                      crate::settings::Shader::Ags001 => Toast::ShaderAgs001,
                      crate::settings::Shader::SharpBilinear => Toast::ShaderSharpBilinear,
+                     crate::settings::Shader::Scanlines => Toast::ShaderScanlines,
                 }, time);
             }
             100 => {
@@ -3460,7 +3463,7 @@ impl Engine {
     fn system_rows(platform: Platform)-> &'static [usize] {
         match platform {
             Platform::Gba=>&[118,34,29],
-            Platform::Snes=>&[118,119],
+            Platform::Snes=>&[119,121],
             Platform::Gbc=>&[118,88,29,90],
             Platform::Gb=>&[118,89,29,36,90],
         }
@@ -3468,7 +3471,7 @@ impl Engine {
     fn system_keys(platform:Platform)-> &'static [usize] {
         match platform {
             Platform::Gba=>&[29,0,22],
-            Platform::Snes=>&[33,32],
+            Platform::Snes=>&[32,35],
             Platform::Gbc=>&[30,21,23,26],
             Platform::Gb=>&[31,1,24,3,27],
         }
@@ -3610,9 +3613,7 @@ impl Engine {
     }
     fn change_game_screen_or_gameplay(&mut self, key: usize, right: bool) {
         if key == 34 && self.current_cart_platform() == Platform::Snes {
-            let modes = [VideoMode::Actual, VideoMode::Aspect, VideoMode::Stretch];
-            let at = modes.iter().position(|m| *m == self.video_mode).unwrap_or(1);
-            self.set_video_mode(modes[(at + if right { 1 } else { 2 }) % 3]);
+            self.set_video_mode(self.video_mode.step(right));
             return;
         }
         let Some(uri)=self.selected_rom_uri() else { return };
@@ -4100,7 +4101,7 @@ impl Engine {
              Shader::LcdGridV2 => 27, Shader::LcdGridV2Gba => 28,
              Shader::ZfastLcd => 29, Shader::Lcd1x => 30,
              Shader::SimpletexGba => 31, Shader::Agb001 => 32,
-             Shader::Ags001 => 33, Shader::SharpBilinear => 34,
+             Shader::Ags001 => 33, Shader::SharpBilinear => 34, Shader::Scanlines => 57,
         };
         match key {
             0 => shader(scoped.shader_gba),
@@ -4142,6 +4143,7 @@ impl Engine {
             21 => shader(scoped.shader_gbc),
             32 => shader(scoped.shader_snes),
             34 => match self.video_mode { VideoMode::Actual=>54, VideoMode::Aspect=>55, VideoMode::Stretch=>56 },
+            35 => match self.settings.snes_video_mode { VideoMode::Actual=>54, VideoMode::Aspect=>55, VideoMode::Stretch=>56 },
             22 => if scoped.shader_gba.includes_gba_color() { 42 }
                 else if scoped.colour_correction_gba {4}else{5},
             23 => if scoped.colour_correction_gbc {4}else{5},
@@ -4184,7 +4186,7 @@ impl Engine {
     fn draw_setting_values(&self, row: usize, keys: &[usize], out: &mut Vec<Draw>) {
         let top = settings_row_top(keys.len());
         for (index, key) in keys.iter().copied().enumerate() {
-            if key > 34 { continue; } // Action-only rows have no value.
+            if key > 35 { continue; } // Action-only rows have no value.
             let (tex, width, height) =
                 if key == 16 && matches!(self.settings.wallpaper,
                     crate::settings::WallpaperPick::File(_)) {
@@ -4981,7 +4983,7 @@ impl Engine {
                         .map_or("", |cart| cart.stem.as_str());
                     self.video_mode = PATHS.lock().unwrap_or_else(|e| e.into_inner())
                         .as_ref().map_or(VideoMode::Actual,
-                            |(root, _)| video_mode::video_mode_for_platform(root, name, self.current_cart_platform()));
+                            |(root, _)| video_mode::video_mode_with_default(root, name, self.current_cart_platform(), self.settings.snes_video_mode));
                     self.apply_video_geometry();
                     self.screen_power = 0.0;
                     self.exiting_screen = false;

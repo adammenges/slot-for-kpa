@@ -465,3 +465,10 @@ fn empty_shelves_are_skipped_in_both_directions() {
     assert_eq!(next_nonempty_shelf(&shelves, 0, -1), 2);
     assert_eq!(next_nonempty_shelf(&shelves, 2, 1), 0);
 }
+
+#[test]
+fn snes_system_settings_offer_shader_and_default_size_without_a_fake_core_switch() {
+    assert_eq!(Engine::system_rows(Platform::Snes), &[119,121]);
+    assert_eq!(Engine::system_keys(Platform::Snes), &[32,35]);
+    assert_eq!(Engine::screen_keys(Platform::Snes), &[32,34]);
+}

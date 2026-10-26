@@ -22,6 +22,7 @@ internal object OfficialArtMatcher {
         val revision: Int?,
         val serial: String?,
         val titleKey: String,
+        val size: Long? = null,
     )
 
     internal class Catalog private constructor(
@@ -31,10 +32,11 @@ internal object OfficialArtMatcher {
             private val gameStart = Regex("""(?m)^game\s*\(\s*$""")
             private val nameLine = Regex("""(?m)^\s*name\s+"([^"\r\n]+)"""")
             private val crcLine = Regex("""\bcrc\s+([0-9a-fA-F]{8})\b""")
+            private val sizeLine = Regex("""\bsize\s+(\d+)\b""")
             private val serialLine = Regex("""\bserial\s+"([A-Za-z0-9]{4})"""")
 
             fun parse(dat: String, platform: String): Catalog {
-                require(platform in setOf("GB", "GBC", "GBA")) { "Unsupported platform" }
+                require(platform in setOf("GB", "GBC", "GBA", "SNES")) { "Unsupported platform" }
                 require(dat.startsWith("clrmamepro (")) { "Not a No-Intro DAT" }
                 val entries = ArrayList<Entry>()
                 for (block in dat.split(gameStart).drop(1)) {
@@ -45,6 +47,7 @@ internal object OfficialArtMatcher {
                         name, crc, region(name), revision(name),
                         serialLine.find(block)?.groupValues?.get(1)?.uppercase(Locale.ROOT),
                         titleKey(name),
+                        sizeLine.find(block)?.groupValues?.get(1)?.toLongOrNull(),
                     ))
                 }
                 require(entries.isNotEmpty()) { "No games in No-Intro DAT" }

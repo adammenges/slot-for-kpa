@@ -36,6 +36,7 @@ internal object CartStudioCatalog {
     internal data class Fingerprint(
         val crc: Long,
         val head: ByteArray,
+        val bytes: Long = 0,
     ) {
         val hex: String get() = java.lang.Long.toHexString(crc)
             .uppercase(Locale.ROOT).padStart(8, '0')
@@ -80,25 +81,40 @@ internal object CartStudioCatalog {
      * and reads 0x150 bytes for the original cart shell detection. Both are
      * computed in one streaming pass, without loading a 32 MiB ROM into RAM.
      */
-    fun fingerprintStream(input: InputStream): Fingerprint {
+    fun fingerprintStream(input: InputStream, snes: Boolean = false): Fingerprint {
         val crc = CRC32()
+        val withoutHeader = CRC32()
         val head = ByteArray(HEAD_BYTES)
-        var got = 0
+        val bodyHead = ByteArray(HEAD_BYTES)
+        var total = 0L
         val buffer = ByteArray(32768)
         input.use { stream ->
             while (true) {
                 val n = stream.read(buffer)
                 if (n < 0) break
                 if (n == 0) continue
+                require(total + n <= 64L * 1024 * 1024) { "ROM exceeds 64 MiB" }
                 crc.update(buffer, 0, n)
-                if (got < HEAD_BYTES) {
-                    val take = minOf(n, HEAD_BYTES - got)
-                    System.arraycopy(buffer, 0, head, got, take)
-                    got += take
+                if (total < HEAD_BYTES) {
+                    val take = minOf(n, HEAD_BYTES - total.toInt())
+                    System.arraycopy(buffer, 0, head, total.toInt(), take)
                 }
+                if (snes) {
+                    val skip = (512L - total).coerceIn(0L, n.toLong()).toInt()
+                    withoutHeader.update(buffer, skip, n - skip)
+                    val offset = (total + skip - 512L).coerceAtLeast(0L)
+                    if (offset < HEAD_BYTES && n > skip) {
+                        val take = minOf(n - skip, HEAD_BYTES - offset.toInt())
+                        System.arraycopy(buffer, skip, bodyHead, offset.toInt(), take)
+                    }
+                }
+                total += n
             }
         }
-        return Fingerprint(crc.value, head.copyOf(got))
+        val copier = snes && total % 32768 == 512L
+        val length = total - if (copier) 512 else 0
+        return Fingerprint(if (copier) withoutHeader.value else crc.value,
+            (if (copier) bodyHead else head).copyOf(minOf(length, HEAD_BYTES.toLong()).toInt()), length)
     }
 
     // A full Studio catalog can contain hundreds of carts. The old adapter
@@ -151,13 +167,14 @@ internal object CartStudioCatalog {
     fun cached(context: Context, rom: Rom): Fingerprint? {
         if (rom.size <= 0 || rom.modified <= 0) return null
         val old = records(context).optJSONObject(rom.uri) ?: return null
+        if (rom.platform == "SNES" && old.optInt("snes_schema") != 1) return null
         if (old.optLong("size") != rom.size ||
             old.optLong("modified") != rom.modified) return null
         return try {
             val crc = old.getLong("crc")
             val header = Base64.decode(old.getString("head"), Base64.DEFAULT)
             if (crc in 0..0xFFFFFFFFL && header.size == HEAD_BYTES)
-                Fingerprint(crc, header)
+                Fingerprint(crc, header, old.optLong("rom_bytes"))
             else null
         } catch (_: Exception) { null }
     }
@@ -182,13 +199,15 @@ internal object CartStudioCatalog {
                 "GB", "GBC" -> embeddedExt in setOf("gb", "gbc")
                 else -> false
             }) { "Unexpected cartridge platform in ZIP" }
-            fingerprintStream(input)
+            fingerprintStream(input, rom.platform == "SNES")
         }
         if (rom.size > 0 && rom.modified > 0 && fingerprint.head.size == HEAD_BYTES) {
             entries.put(rom.uri, JSONObject()
                 .put("size", rom.size)
                 .put("modified", rom.modified)
                 .put("crc", fingerprint.crc)
+                .put("rom_bytes", fingerprint.bytes)
+                .put("snes_schema", 1)
                 .put("head", Base64.encodeToString(fingerprint.head, Base64.NO_WRAP)))
             unsavedFingerprints++
             if (unsavedFingerprints >= CACHE_BATCH) flush(context)

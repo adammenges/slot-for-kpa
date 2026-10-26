@@ -24,6 +24,7 @@ pub enum ScreenEffect {
     Agb001,
     Ags001,
     SharpBilinear,
+    Scanlines,
 }
 
 impl ScreenEffect {

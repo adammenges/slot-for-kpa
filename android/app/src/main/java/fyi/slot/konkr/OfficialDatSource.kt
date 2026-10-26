@@ -22,6 +22,7 @@ internal object OfficialDatSource {
         "GB" to "Nintendo - Game Boy.dat",
         "GBC" to "Nintendo - Game Boy Color.dat",
         "GBA" to "Nintendo - Game Boy Advance.dat",
+        "SNES" to "Nintendo - Super Nintendo Entertainment System.dat",
     )
 
     fun load(context: Context, platform: String, shouldContinue: () -> Boolean):

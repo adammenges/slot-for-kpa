@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'android/**'
+      - 'assets/**'
       - 'crates/slot-android/**'
       - 'crates/slot-gfx/**'
       - 'crates/slot-retro/**'
@@ -56,6 +57,8 @@ jobs:
           cargo test --locked -p slot-ui --test cart_material --test mixed_shelf_parity --test native_density
       - name: Test real Snes9x with generated NTSC and PAL cartridges
         run: bash scripts/test-snes9x.sh
+      - name: Test SNES Studio drafts and label cropping
+        run: node --test android/studio/*.test.mjs
       - name: Test capture tools and report parsers
         run: |
           bash -n tools/retroarch-parity/capture_pair.sh

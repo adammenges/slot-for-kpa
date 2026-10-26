@@ -3,6 +3,10 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
+[ -s android/app/src/main/assets/studio/pkg/slot_cart_studio_bg.wasm ] || {
+  echo "Package Cart Studio first: bash scripts/dev-android.sh studio" >&2
+  exit 1
+}
 # About uses the Android app versionName rather than a frozen DEV13 label.
 SLOT_KONKR_VERSION="$(sed -nE 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' android/app/build.gradle.kts | head -n 1)"
 if [ -z "$SLOT_KONKR_VERSION" ]; then
@@ -27,7 +31,20 @@ fi
 # generic Android font. The same exporter is verified by CI.
 cargo run --locked -p slot-ui --example export_apps_legend -- \
   android/app/src/main/assets/apps_controls
-cargo ndk -t arm64-v8a -o android/app/src/main/jniLibs build --release -p slot-android
+# Use the pinned NDK compiler directly; cargo-ndk is not another prerequisite.
+ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Library/Android/sdk}}/ndk/27.2.12479018}"
+export ANDROID_NDK_HOME
+NDK_BIN=""
+for candidate in "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/*/bin; do
+  if [ -x "$candidate/aarch64-linux-android31-clang" ]; then NDK_BIN="$candidate"; break; fi
+done
+[ -n "$NDK_BIN" ] || { echo "Pinned Android NDK compiler not found" >&2; exit 1; }
+export CC_aarch64_linux_android="$NDK_BIN/aarch64-linux-android31-clang"
+export AR_aarch64_linux_android="$NDK_BIN/llvm-ar"
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
+cargo build --locked --release -p slot-android --target aarch64-linux-android
+mkdir -p android/app/src/main/jniLibs/arm64-v8a
+cp target/aarch64-linux-android/release/libslot_android.so android/app/src/main/jniLibs/arm64-v8a/
 
 # Keep the validated mGBA/gpSP/Gambatte/Slot machine code and all exported JNI/libretro
 # symbols unchanged. The preview APK previously shipped .symtab/.strtab and

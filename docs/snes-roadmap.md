@@ -1,7 +1,8 @@
 # SNES roadmap
 
 Status as of 2026-10-26: SNES gameplay is implemented through Snes9x. The textured
-cartridge PNGs have not been generated or integrated. This roadmap tracks the
+cartridge PNGs have not been generated or integrated. The current SVG has been
+polished and now supports solid shell colors. This roadmap tracks the
 remaining work to make SNES a first-class console in the Android/KONKR app.
 Unchecked items are planned work, not supported features.
 
@@ -15,11 +16,11 @@ the completion criteria; P2 contains optional extensions.
 | Area | Current implementation |
 | --- | --- |
 | ROMs and core | Pinned, packaged Snes9x; `.sfc`, headered `.smc`, and one-game ZIP discovery and launch |
-| Library | Separate SNES shelf, favorites, recents, generated title labels, and a basic SVG shell |
+| Library | Separate SNES shelf, favorites, recents, generated title labels, and a beveled SVG shell |
 | Controls | One controller with native A/B/X/Y, L/R, D-pad, Start and Select; X/Y are not consumed by Game Boy turbo mapping |
 | Video | Dynamic frame dimensions, NTSC/PAL timing, high-resolution/interlaced output, and per-game Integer/4:3/Stretch modes |
 | Sessions | SRAM, save states, suspend/resume, rewind, fast-forward, run-ahead, and screenshots |
-| Artwork editing | Custom PNG labels through a separate SNES Cart Studio page; the X shortcut opens the selected cartridge |
+| Artwork editing | Native-rendered previews, custom PNG labels, shell colors, searchable titles and retained drafts; SNES shares the Studio system tabs and the X shortcut opens the selected cartridge |
 | Achievements | SNES console identification, header-normalized hashes, WRAM/SRAM and optional SA-1 memory integration |
 | Verification | Generated real-core probes, runtime/JVM tests, and Android emulator exercises |
 
@@ -112,9 +113,9 @@ Save as an RGBA PNG.
 - [ ] Extend the focused cartridge/density checks for the new assets. Include
   light/dark shelf previews, the small seated cartridge, insertion/ejection,
   long generated titles, and custom labels at 1× and 4/3× display density.
-- [ ] Add `assets/**` to the relevant CI path filters and verify the SNES PNG is
-  packaged in the APK's Studio assets. The current checks cover the SNES HTML
-  and core; artwork-only changes must also trigger verification.
+- [x] Add `assets/**` to the relevant CI path filters. Studio's HTML, modules,
+  current SVG and native preview JNI export are verified in the release build.
+- [ ] Extend those packaging checks to the final generated SNES PNG assets.
 
 Done when the actual shelf and Studio display matching, textured cartridges
 without clipped labels, edge halos, stale cached art, or changes to GB/GBC/GBA.
@@ -122,26 +123,27 @@ Retain the existing SVG reference until the PNG integration is verified.
 
 ## P1 — Complete artwork discovery and Cart Studio
 
-The automatic art path currently excludes SNES in
-[AutoCartLabels.kt](../android/app/src/main/java/fyi/slot/konkr/AutoCartLabels.kt).
-The full Studio exposes SNES through a separate link and a compact editor in
-[snes.html](../android/studio/snes.html).
+SNES now has an exact-match Libretro artwork path alongside the existing Game
+Boy catalog. See [artwork sources and behavior](snes-support.md#automatic-artwork).
+The SNES editor shares the full Studio's system navigation while keeping both
+editors alive so drafts survive tab switches.
 
-- [ ] Choose and document a SNES artwork/catalog source, its coverage, and
+- [x] Choose and document a SNES artwork/catalog source, its coverage, and
   attribution requirements. Keep this separate from the existing Game Boy
   catalog, which does not provide SNES art.
-- [ ] Add matching for ROM content and region/revision, handling copier headers
+- [x] Add matching for ROM content and region/revision, handling copier headers
   and ZIP-contained games consistently. Keep a generated-title fallback for
   homebrew, hacks and unmatched ROMs; never silently apply an uncertain match.
-- [ ] Add automatic filling of missing SNES labels with caching, bounded
+- [x] Add automatic filling of missing SNES labels with caching, bounded
   downloads, retry/offline behavior, and preservation of user-selected labels.
-- [ ] Integrate SNES into the normal Studio system navigation and browse/search
+- [x] Integrate SNES into the normal Studio system navigation and browse/search
   flow. Preserve the direct X shortcut and mixed-platform libraries; verify
-  physical-controller focus, save/cancel, and returning to the shelf.
-- [ ] Make generated fallback labels and imported-art crops consistent between
+  Android gamepad-key focus, save/cancel, and returning to the shelf in the
+  emulator. Physical-controller validation remains in the hardware matrix.
+- [x] Make generated fallback labels and imported-art crops consistent between
   Studio and the native renderer. Cover tall/wide artwork, long titles, and
   changing cartridges with unsaved edits.
-- [ ] Add solid shell-color editing with persisted per-game overrides while
+- [x] Add solid shell-color editing with persisted per-game overrides while
   preserving material shading and label colors. Keep transparent shells out of
   the initial scope until their interior artwork is available.
 
@@ -151,17 +153,18 @@ through the same discoverable editing flow as the other consoles.
 
 ## P1 — Finish SNES settings and presentation
 
-SNES already has its own shader setting, but
-[settings.rs](../crates/slot-android/src/settings.rs) cycles the Game Boy shader
-list. Screen size is stored per game in
-[video_mode.rs](../crates/slot-android/src/video_mode.rs), defaulting to 4:3.
+SNES has an explicit Off / Sharp Bilinear / Scanlines preset list and a
+system-wide screen-size default (initially 4:3). Existing per-game overrides
+continue to win. The fixed Snes9x core no longer appears as a cycling system
+setting.
 
-- [ ] Define an explicit SNES display preset list with suitable clean scaling
-  choices; evaluate a lightweight CRT/scanline option on KONKR. Keep Off as the
-  default and verify presets at normal, high-resolution and interlaced sizes.
-- [ ] Add a system-wide SNES screen-size default while retaining per-game
+- [x] Define an explicit SNES display preset list with clean scaling and a
+  lightweight scanline option; keep Off as the default.
+- [ ] Evaluate the scanline preset's sustained cost on physical KONKR hardware
+  and verify real games that switch between normal and interlaced output.
+- [x] Add a system-wide SNES screen-size default while retaining per-game
   overrides and migrating existing choices without changing them.
-- [ ] Audit menu text, button legends and shortcuts for native SNES X/Y and L/R.
+- [x] Audit menu text, button legends and shortcuts for native SNES X/Y and L/R.
   Keep Game Boy palettes, color correction, LCD bezels and Slot Link actions out
   of SNES-specific menus. Show the fixed Snes9x core as informational rather
   than suggesting that a second core can be selected.
@@ -191,18 +194,22 @@ provided games; keep ROMs out of the repository.
 
 - [ ] Complete the matrix above on a physical KONKR and publish results with
   explicit unsupported cases rather than a blanket compatibility claim.
-- [ ] Turn the current manual Android emulator walkthrough into repeatable
+- [x] Turn the current manual Android emulator walkthrough into repeatable
   smoke coverage using the existing original probe ROMs. Retain the real-core
-  host tests and add focused regressions for defects found in real games.
+  host tests. The five-format launch/save/resume check is now
+  [snes_smoke.py](../tools/emulation-lab/snes_smoke.py); add focused regressions
+  as defects are found in real games.
 - [ ] Track the 12 pre-existing broader UI test failures separately; repair them
   or maintain explicit baseline accounting so new failures cannot be hidden.
-- [ ] Document a clean-clone local build/run path that does not depend on this
+- [x] Document a clean-clone local build/run path that does not depend on this
   checkout's ignored `.build/` tools or prepared AVD. Keep pinned core, licenses,
   artwork packaging and the APK contents checks reproducible in CI.
-- [ ] Update README feature descriptions, SNES settings, limitations and real
-  screenshots when the corresponding work lands. Identify the SNES-capable
-  build/release explicitly; the current installation link points to upstream
-  releases and should not imply they contain this fork's SNES changes.
+- [x] Update README feature descriptions, SNES settings, limitations and an
+  actual emulator screenshot of the current SVG-based editor. The
+  installation instructions distinguish upstream releases from this fork's
+  local SNES builds.
+- [ ] Publish a verified SNES release and refresh the product screenshots once
+  the final generated shell artwork is integrated.
 
 Use the [existing regression commands](snes-support.md#reproduce-the-tests)
 throughout implementation. For the artwork change, start with:

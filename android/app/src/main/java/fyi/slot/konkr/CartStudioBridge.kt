@@ -60,6 +60,7 @@ internal class CartStudioBridge(
         keyed[id] ?: throw IllegalArgumentException("Cartridge is not in Slot library")
 
     companion object {
+        val labelWriteLock = Any()
         fun key(uri: String): String {
             var hash = -3750763034362895579L
             for (byte in uri.toByteArray(Charsets.UTF_8)) {
@@ -109,11 +110,17 @@ internal class CartStudioBridge(
             val cached = CartStudioCatalog.cached(context, rom)
             if (cached != null) sessionFingerprints[key(rom.uri)] = cached
             if (!labelExists && cached == null) allReady = false
+            val storedShell = savedShell(context, rom.uri)
+            // Older mixed-library saves could assign GB outlines/clear finishes
+            // to SNES. Its mould is always solid; preserve only their color.
+            val shell = if (rom.platform == "SNES" && storedShell != null)
+                "auto ${storedShell.split(' ')[1]} solid" else storedShell ?: "auto"
             val entry = JSONObject()
                 .put("id", key(rom.uri))
                 .put("platform", rom.platform)
                 .put("stem", rom.title)
                 .put("hasLabel", labelExists)
+                .put("shell", shell)
             // A valid size/mtime CRC avoids one Java bridge round-trip per
             // unchanged ROM, and avoids reading its entire contents again.
             if (cached != null) {
@@ -164,12 +171,17 @@ internal class CartStudioBridge(
 
     @Synchronized
     @JavascriptInterface
-    fun saveLabel(platform: String, stem: String, encoded: String, replace: Boolean): String {
+    fun saveLabel(platform: String, stem: String, encoded: String, replace: Boolean): String = try {
+        writeLabel(named(platform, stem), encoded, replace)
+    } catch (error: Exception) {
+        "error: " + (error.message ?: "Cannot save label")
+    }
+
+    private fun writeLabel(rom: CartStudioCatalog.Rom, encoded: String, replace: Boolean): String = synchronized(labelWriteLock) {
         // WebView turns a Java exception into the unhelpful generic "Java
         // exception was raised during method invocation". Return a precise
         // result instead, and record the full underlying stack in logcat.
         return try {
-            val rom = named(platform, stem)
             // Actual generated PNG labels may exceed 2 MiB, especially GB/GBC
             // full-colour scans. Validate decoded pixels, not a tiny arbitrary
             // compressed size. Never write outside app-private storage.
@@ -187,14 +199,48 @@ internal class CartStudioBridge(
             }
             atomicWrite(target, bytes)
             require(target.length() == bytes.size.toLong()) { "Incomplete label write" }
+            File(target.path + ".source.json").delete()
             dirty.set(true)
             "written"
         } catch (error: Exception) {
             android.util.Log.e("SlotStudioSave",
-                "Failed to write ${platform}/${stem}: ${error.message}", error)
+                "Failed to write ${rom.platform}/${rom.title}: ${error.message}", error)
             val reason = error.message?.replace("\n", " ")?.take(240) ?: error.javaClass.simpleName
             "error: ${reason}"
         }
+    }
+
+    /** SNES writes use opaque IDs, so duplicate filenames stay independent. */
+    @Synchronized
+    @JavascriptInterface
+    fun saveSnesLabel(id: String, encoded: String): String {
+        val rom = known(id)
+        require(rom.platform == "SNES")
+        return writeLabel(rom, encoded, true)
+    }
+
+    @Synchronized
+    @JavascriptInterface
+    fun saveSnesShell(id: String, value: String): String = try {
+        val rom = known(id)
+        require(rom.platform == "SNES")
+        require(value == "auto" || Regex("auto [0-9a-fA-F]{6} solid").matches(value))
+        val target = profile(context, rom.uri)
+        if (value == "auto") {
+            require(!target.exists() || target.delete()) { "Cannot reset shell" }
+        } else atomicWrite(target, value.toByteArray(Charsets.UTF_8))
+        dirty.set(true)
+        "written"
+    } catch (error: Exception) {
+        "error: " + (error.message ?: "Cannot save shell")
+    }
+
+    @JavascriptInterface
+    fun snesPreview(id: String, shell: String): String {
+        val rom = known(id)
+        require(rom.platform == "SNES")
+        require(shell == "auto" || Regex("auto [0-9a-fA-F]{6} solid").matches(shell))
+        return Base64.encodeToString(SnesCartRenderer.render(rom.title, shell), Base64.NO_WRAP)
     }
 
     @JavascriptInterface
@@ -230,6 +276,9 @@ internal class CartStudioBridge(
         // Original Studio's key is stem only; matching it across more than
         // one platform is safe only when every occurrence shares the setting.
         for (rom in roms) {
+            // The SNES editor owns URI-keyed overrides independently of the
+            // upstream Game Boy stem-based configuration.
+            if (rom.platform == "SNES") continue
             val desired = requested[rom.title]?.takeUnless { it == "auto" }
             val current = savedShell(context, rom.uri)
             if (desired == current) continue

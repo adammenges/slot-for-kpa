@@ -155,7 +155,7 @@ class CartStudioActivity : Activity() {
                 return try {
                     val mime = when {
                         path.endsWith(".html") -> "text/html"
-                        path.endsWith(".js") -> "text/javascript"
+                        (path.endsWith(".js") || path.endsWith(".mjs")) -> "text/javascript"
                         path.endsWith(".css") -> "text/css"
                         path.endsWith(".wasm") -> "application/wasm"
                         path.endsWith(".json") -> "application/json"
@@ -171,7 +171,8 @@ class CartStudioActivity : Activity() {
                 view: WebView?, request: WebResourceRequest?
             ): Boolean {
                 // Never let a frame with the JavaScript bridge navigate to a remote page.
-                return request?.url?.toString() !in setOf(PAGE, "$ORIGIN/studio/snes.html")
+                return request?.url?.buildUpon()?.fragment(null)?.build()?.toString() !in
+                    setOf(PAGE, "$ORIGIN/studio/snes.html")
             }
         }
         w.webChromeClient = object : WebChromeClient() {
@@ -292,7 +293,7 @@ class CartStudioActivity : Activity() {
             if (!save.isEnabled) return@setOnClickListener
             save.isEnabled = false
             save.text = "SAVING…"
-            w.evaluateJavascript("document.getElementById('write')?.click()", null)
+            w.evaluateJavascript("(window.slotStudioDocument?.() || document).getElementById('write')?.click()", null)
         }
         w.addJavascriptInterface(object {
             @JavascriptInterface
@@ -371,20 +372,32 @@ class CartStudioActivity : Activity() {
      */
     private fun backInStudio() {
         if (isFinishing) return
-        if (singleCartMode) { finish(); return }
         val view = web ?: run { finish(); return }
-        if (!snesOnly && view.url?.endsWith("/snes.html") == true) { view.loadUrl(PAGE); return }
         view.evaluateJavascript("""
             (() => {
                 const editor = document.getElementById('editor');
-                if (editor && !editor.hidden) {
+                if (!${singleCartMode} && editor && !editor.hidden) {
                     document.getElementById('ed-close')?.click();
                     return 'editor';
                 }
-                return 'catalog';
+                return window.slotStudioHasChanges?.() ? 'dirty' : 'exit';
             })()
         """.trimIndent()) { result ->
-            if (result == "\"catalog\"" && !isFinishing) finish()
+            if (isFinishing || isDestroyed) return@evaluateJavascript
+            if (result == "\"dirty\"") {
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Discard unsaved changes?")
+                    .setMessage("Your saved labels and shell colors will be kept.")
+                    .setOnKeyListener { dialog, code, event ->
+                        if (code == KeyEvent.KEYCODE_BUTTON_B) {
+                            if (event.action == KeyEvent.ACTION_UP) dialog.dismiss()
+                            true
+                        } else false
+                    }
+                    .setNegativeButton("Keep editing", null)
+                    .setPositiveButton("Discard and leave") { _, _ -> finish() }
+                    .show()
+            } else if (result != "\"editor\"") finish()
         }
     }
 

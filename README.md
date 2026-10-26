@@ -49,7 +49,7 @@ Built specifically for the KONKR Pocket Advance
 - **RetroAchievements, online and offline** — Earn achievements on supported GBA, GB, GBC and SNES games. Prepare your library while connected, then play offline and synchronize your unlocks when you're back online.
 - **Multiplayer on Android** — Play compatible games over local Wi-Fi using mGBA Link Cable or gpSP Link Cable / Wireless RFU.
 - **More GBA shaders** — Ten selectable GBA shader presets plus Off, including LCD3x, LCD Grid, Dot and display styles inspired by the original GBA and GBA SP.
-- **Independent system settings** — Configure the default core, shader, color correction and bezel of GBA, GB and GBC separately in **START → Settings → Systems**.
+- **Independent system settings** — Configure GBA, GB, GBC and SNES separately in **START → Settings → Systems**. SNES has its own display presets and default screen size; Game Boy systems retain their core, color-correction and bezel choices.
 - **Game Boy screen sizes and overlays** — Integer, Original Ratio or Stretch for GB and GBC games, with Game Boy, Game Boy Pocket and Game Boy Color overlays.
 - **Optimized cartridge browsing** — Background artwork loading, persistent caching and GPU texture management designed to keep large libraries responsive.
 - **Android app launcher** — Launch your other Android apps directly from Slot, with the option to make Slot your HOME launcher.
@@ -63,7 +63,7 @@ Getting started with slot. is easy. Just point it to your games, pick a cartridg
 
 ### Installation
 
-1. Download the latest APK from [Releases](https://github.com/Baggio94/slot-for-kpa/releases).
+1. Download the original port's APK from [Releases](https://github.com/Baggio94/slot-for-kpa/releases), or [build this fork locally](docs/android-development.md) for the SNES changes described here. The upstream release link does not establish that those builds include this fork's SNES work.
 2. Install it on your KONKR Pocket Advance.
 3. Open **slot.**
 
@@ -99,6 +99,10 @@ Simply install the newer APK over your existing installation. **Do not uninstall
 
 Run the Android app in an ARM64 emulator to try SNES on your Mac. The debug APK
 uses the separate package `fyi.slot.konkr.diag` and keeps its saves isolated.
+
+For a fresh clone, follow [Build and test Android locally](docs/android-development.md).
+The `scripts/dev-android.sh` helper checks prerequisites, builds the app and
+Studio, installs the debug APK, and runs the SNES smoke test.
 
 ### Start the prepared local emulator
 
@@ -228,8 +232,24 @@ A/B/X/Y and L1/R1 are native SNES buttons. Turbo A/B does not replace X/Y.
 Open the in-game menu → Settings → Screen to choose **Integer**, **4:3**
 (the default), or **Stretch**; L1/R1 stay available to the game. Save states,
 battery saves, rewind, fast-forward and run-ahead use the existing controls.
-SNES gets a separate shelf and cartridge shape. Cart Studio accepts custom PNG
-labels; automatic official artwork and shell colors remain Game Boy features.
+SNES gets a separate shelf and cartridge shape. Cart Studio supports custom PNG
+labels, shell colors, title search, and drafts that survive switching cartridges
+or system tabs. Its preview uses the same renderer as the shelf.
+
+![SNES Cart Studio in the Android emulator](.github/resources/snes-studio.png)
+
+The current SVG shell and an original test label, captured from the running app.
+Textured shell PNGs remain on the [roadmap](docs/snes-roadmap.md).
+
+SNES display presets are **Off**, **Sharp Bilinear**, and **Scanlines**. Set a
+default screen size under **START → Settings → Systems → Super Nintendo**;
+existing per-game size choices continue to override it.
+
+Automatic SNES labels use Libretro box art matched by exact ROM CRC and size,
+with copier headers removed and ZIP contents handled consistently. These are
+adapted covers, not scans of physical cartridge labels. Custom labels always
+win, downloaded labels work offline, and unmatched games keep generated title
+labels. See [artwork sources and behavior](docs/snes-support.md#automatic-artwork).
 
 This implementation supports one SNES controller. Slot Link multiplayer, mouse,
 light guns, and MSU-1 sidecar files are not supported. Game compatibility and

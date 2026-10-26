@@ -576,6 +576,15 @@ pub fn snes_cart_shadow() -> CartFace {
 
 fn snes_face(cart: &Cart, art: Option<Vec<u8>>) -> CartFace {
     let mut face = snes_plastic();
+    if let Some(choice) = cart.shell {
+        // Preserve the mould's light/shadow relief; labels are pasted later.
+        let neutral = [0xb6i16, 0xb5, 0xbb];
+        for pixel in face.rgba.chunks_exact_mut(4) {
+            for c in 0..3 {
+                pixel[c] = (choice.colour[c] as i16 + pixel[c] as i16 - neutral[c]).clamp(0,255) as u8;
+            }
+        }
+    }
     let spec = Spec { w: 360, h: 240, label: (66, 54, 228, 138), mask: &[], mould: Mould::Gba, shell: None };
     let label = art.unwrap_or_else(|| generated_label(&spec, &label_text(cart)));
     paste_label(&spec, &mut face, &label);

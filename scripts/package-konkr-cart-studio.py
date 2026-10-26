@@ -28,6 +28,8 @@ def package(root: Path, built: Path):
         shutil.copy2(built / "pkg" / name, target / "pkg" / name)
     shutil.copy2(root / "android/studio/android-card.js", target / "android-card.js")
     shutil.copy2(root / "android/studio/snes.html", target / "snes.html")
+    for name in ("snes.mjs", "snes-state.mjs", "snes-tabs.mjs"):
+        shutil.copy2(root / "android/studio" / name, target / name)
     shutil.copy2(root / "crates/slot-ui/assets/snes_cart.svg", target / "snes_cart.svg")
     # Only the Android-packaged web app gets compact embedded CSS.
     shutil.copy2(root / "android/studio/embedded.css", target / "embedded.css")
@@ -35,14 +37,21 @@ def package(root: Path, built: Path):
     jsfile = target / "studio.js"
     js = jsfile.read_text("utf-8")
     js = "import { fromAndroid } from './android-card.js';\n" + js
+    js = "import { installSnesTabs } from './snes-tabs.mjs';\n" + js
     js += """
-if (window.AndroidStudio && JSON.parse(AndroidStudio.session()).carts.some(c => c.platform === 'SNES')) {
-  const link = document.createElement('a');
-  link.href = 'snes.html'; link.textContent = 'SNES cartridges';
-  link.style.cssText = 'position:fixed;bottom:16px;left:20px;z-index:20;padding:12px 18px;background:#eee9df;color:#222;border-radius:8px;font:16px sans-serif';
-  document.body.append(link);
-}
+if (window.AndroidStudio) installSnesTabs({
+  showPlatform, selectedPlatform: () => session?.platform,
+  hasChanges: () => readyCarts().length > 0 || shellChanges().length > 0,
+  refreshToolbar: () => { lastNativeActionState = ''; updateWriteBar(); updateFillButton(); },
+});
 """
+    js = checked_replace(js,
+        "  renderTabs();\n}\n\nfunction updateWriteBar()",
+        "  renderTabs();\n  window.slotSnesTabs?.show(p);\n}\n\nfunction updateWriteBar()")
+    js = checked_replace(js,
+        "\n}\n\n// Switching hides the other shelves",
+        "\n  window.slotSnesTabs?.render();\n}\n\n// Switching hides the other shelves")
+
 
     js = checked_replace(js, "  const crc = new Crc32();",
                          "  if (file.slotCrc != null) return file.slotCrc >>> 0;\n  const crc = new Crc32();")
@@ -307,7 +316,7 @@ function observeAndroidCarts(s) {
  font-src 'self' https://fonts.gstatic.com data:;
  connect-src 'self' https://raw.githubusercontent.com https://art.slot-cfw.fyi;
  img-src 'self' data: blob: https://raw.githubusercontent.com https://art.slot-cfw.fyi;
- object-src 'none'; frame-src 'none'; base-uri 'self'; form-action 'none';
+ object-src 'none'; frame-src 'self'; base-uri 'self'; form-action 'none';
 ">""")
     html = checked_replace(html, '<link rel="stylesheet" href="studio.css">',
         '<link rel="stylesheet" href="studio.css">\n<link rel="stylesheet" href="embedded.css">')

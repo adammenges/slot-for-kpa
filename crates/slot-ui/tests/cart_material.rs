@@ -97,3 +97,28 @@ fn snes_cartridge_has_its_own_shape_label_and_dense_pixels() {
         });
     }
 }
+
+#[test]
+fn snes_solid_shell_color_preserves_labels_and_silhouette_at_each_density() {
+    let mut cart=cartridge("", "Custom SNES (USA)");
+    cart.platform=Platform::Snes;
+    for scale in [1.0,4.0/3.0] {
+        slot_ui::density::with_scale(scale,|| {
+            cart.shell=None;
+            let neutral=cart_face_with_material(&cart,None);
+            cart.shell=slot_store::ShellChoice::parse("auto 365d9d solid");
+            let colored=cart_face_with_material(&cart,None);
+            let width=slot_ui::density::px(360);
+            let mut changed=0;
+            for (i,(old,new)) in neutral.rgba.chunks_exact(4).zip(colored.rgba.chunks_exact(4)).enumerate() {
+                assert_eq!(old[3],new[3]);
+                let x=i as u32%width; let y=i as u32/width;
+                if x>=slot_ui::density::px(66) && x<slot_ui::density::px(294)
+                    && y>=slot_ui::density::px(54) && y<slot_ui::density::px(192) {
+                    assert_eq!(old,new,"shell tint must not recolor labels");
+                } else if old[3]>0 && old!=new { changed+=1; }
+            }
+            assert!(changed>1000);
+        });
+    }
+}

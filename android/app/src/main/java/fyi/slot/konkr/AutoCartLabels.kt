@@ -66,10 +66,17 @@ internal object AutoCartLabels {
 
     /** Returns true if more bounded foreground work is pending, including retries. */
     fun fill(context: Context, shouldContinue: () -> Boolean, onSaved: (String) -> Unit): Boolean {
+        val snes = SnesArtwork.fill(context, shouldContinue, onSaved)
+        val gameBoy = fillGameBoy(context, shouldContinue, onSaved)
+        if (snes) batchDelayMs = minOf(if (gameBoy) batchDelayMs else Long.MAX_VALUE, SnesArtwork.nextDelayMs)
+        return snes || gameBoy
+    }
+
+    private fun fillGameBoy(context: Context, shouldContinue: () -> Boolean, onSaved: (String) -> Unit): Boolean {
         if (!shouldContinue()) return false
         batchDelayMs = 4_000L
         // The official artwork catalog currently covers the three Game Boy systems.
-        // SNES uses its generated label or artwork chosen in Cart Studio.
+        // SNES has its own exact-match Libretro artwork path above.
         val games = CartStudioCatalog.games(context).filter { it.platform != "SNES" }
         if (games.isEmpty()) {
             Log.i(TAG, "Deferred: cached ROM library not ready (zero indexed games)")

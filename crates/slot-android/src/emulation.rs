@@ -91,6 +91,7 @@ impl EmulationProfile {
         if !view.change(actual_key,right) { return false; }
         match key {
             32 if platform==Platform::Snes => self.screen_shader=Some(view.shader_snes),
+            21 if platform==Platform::Gbc => self.screen_shader=Some(view.shader_gbc),
             0 if platform==Platform::Gba =>
                 self.screen_shader=Some(view.shader_gba),
             1 if platform!=Platform::Gba =>

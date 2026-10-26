@@ -686,7 +686,9 @@ impl GameSession {
                         std::fs::remove_file(&marker).map_err(|e|
                             format!("Cannot clear one-shot solo-state guard: {e}"))?;
                     }
-                    Ok(()) => {}
+                    Ok(()) => {
+                        if which == Core::Snes9x { log_launch_timing("Snes9x auto state restored"); }
+                    }
                     Err(error) => {
                         eprintln!("slot-konkr: {} state resume skipped: {error}", which.text());
                     }

@@ -173,6 +173,15 @@ void main() {
         vec2 delta=s-vec2(0.5);
         vec2 filtered=(delta-clamp(delta,vec2(-bound),vec2(bound)))*scale+0.5;
         c=nearest_bilinear((floor(texel)+filtered)/u_src);
+        if (u_mode > 12.5) {
+            // A restrained beam profile, with no LCD color mask. Interlaced
+            // SNES output uses one beam per pair of source lines. Fade the
+            // effect below 2x to avoid aliasing on smaller destinations.
+            float lines=u_src.y > 300.0 ? u_src.y*0.5 : u_src.y;
+            float pitch=(u_rect.w*u_fbo.y)/lines;
+            float strength=smoothstep(1.0,2.0,pitch);
+            c*=1.0-strength*0.10*(1.0+cos(6.283185307*uv.y*lines));
+        }
     } else if (u_mode > 10.5) {
         // endrift AGS-001: frontlit SP gamma, subpixel mask and light.
         c=ags_first_pass(uv);

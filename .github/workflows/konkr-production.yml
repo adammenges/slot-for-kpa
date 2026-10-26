@@ -123,12 +123,13 @@ jobs:
         run: |
           set -euo pipefail
           cp -a third_party/slot-cart-studio studio-upstream/slot-cart-studio
+          cp android/studio/Cargo.lock studio-upstream/slot-cart-studio/Cargo.lock
           # Isolate the pinned upstream Cargo project from our parent workspace.
           # This edit affects the ephemeral CI copy only; vendored sources stay exact.
           printf '\n[workspace]\n' >> studio-upstream/slot-cart-studio/Cargo.toml
           test "$(tr -d '\r\n' < studio-upstream/slot-cart-studio/slot.ref)" = \
                "$(git -C studio-upstream/slot rev-parse HEAD)"
-          node --test studio-upstream/slot-cart-studio/web/*.test.mjs
+          node --test studio-upstream/slot-cart-studio/web/*.test.mjs android/studio/*.test.mjs
 
       - name: Install wasm-pack and target for original Studio
         run: |
@@ -141,7 +142,7 @@ jobs:
         run: |
           set -euo pipefail
           (cd studio-upstream/slot-cart-studio && \
-            wasm-pack build --release --target web --no-typescript --out-dir web/pkg)
+            wasm-pack build --release --target web --no-typescript --out-dir web/pkg -- --locked)
           python3 scripts/package-konkr-cart-studio.py \
             --source . --built studio-upstream/slot-cart-studio/web
           test -s android/app/src/main/assets/studio/pkg/slot_cart_studio_bg.wasm
@@ -175,6 +176,7 @@ jobs:
           import re
           from pathlib import Path
           source = Path("android/app/src/main/java/fyi/slot/konkr/MainActivity.kt").read_text()
+          assert "Java_fyi_slot_konkr_SnesCartRenderer_render" in Path(__import__("os").environ["RUNNER_TEMP"], "slot-jni-exports.txt").read_text()
           expected = set(re.findall(r"\bexternal\s+fun\s+([A-Za-z0-9_]+)\s*\(", source))
           nm_text = Path(__import__("os").environ["RUNNER_TEMP"], "slot-jni-exports.txt").read_text()
           exported = set(re.findall(r"\bJava_fyi_slot_konkr_MainActivity_([A-Za-z0-9_]+)\b", nm_text))
@@ -236,7 +238,8 @@ jobs:
               gambatte = json.loads(archive.read("assets/core-build-gambatte.json"))
               snes9x = json.loads(archive.read("assets/core-build-snes9x.json"))
               archive.getinfo("assets/licenses/snes9x-LICENSE.txt")
-              archive.getinfo("assets/studio/snes.html")
+              for name in ("snes.html", "snes.mjs", "snes-state.mjs", "snes-tabs.mjs", "snes_cart.svg"):
+                  archive.getinfo("assets/studio/" + name)
           assert snes9x["revision"] == open("cores/snes9x/revision").read().strip()
           assert "achievement-memory.patch" in snes9x["patches"]
           assert mgba["revision"] == "7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6"

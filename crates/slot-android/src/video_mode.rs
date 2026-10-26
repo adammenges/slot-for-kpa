@@ -7,7 +7,8 @@ use crate::settings::{Bezel, Shader};
 
 pub const VIDEO_MODE_FILE: &str = "Config/video_mode.ini";
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum VideoMode {
     #[default]
     Actual,
@@ -17,6 +18,12 @@ pub enum VideoMode {
 }
 
 impl VideoMode {
+    pub fn step(self, right: bool) -> Self {
+        let modes = [Self::Actual, Self::Aspect, Self::Stretch];
+        let at = modes.iter().position(|mode| *mode == self).unwrap();
+        modes[(at + if right { 1 } else { 2 }) % modes.len()]
+    }
+
     pub fn as_str(self) -> &'static str {
         match self {
             VideoMode::Actual => "actual",
@@ -92,11 +99,16 @@ pub fn video_mode_for(root: &Path, stem: &str) -> VideoMode {
     video_mode_for_platform(root, stem, Platform::Gba)
 }
 
+#[cfg(test)]
 pub fn video_mode_for_platform(root: &Path, stem: &str, platform: Platform) -> VideoMode {
+    video_mode_with_default(root, stem, platform, VideoMode::Aspect)
+}
+
+pub fn video_mode_with_default(root: &Path, stem: &str, platform: Platform, snes_default: VideoMode) -> VideoMode {
     ini::value(root, VIDEO_MODE_FILE, stem)
         .as_deref()
         .and_then(VideoMode::parse)
-        .unwrap_or(if platform == Platform::Snes { VideoMode::Aspect } else { VideoMode::Actual })
+        .unwrap_or(if platform == Platform::Snes { snes_default } else { VideoMode::Actual })
 }
 
 pub fn write_video_mode(root: &Path, stem: &str, mode: VideoMode) -> std::io::Result<()> {

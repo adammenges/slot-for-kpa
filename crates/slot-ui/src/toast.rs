@@ -31,6 +31,7 @@ pub enum Toast {
     ShaderAgb001,
     ShaderAgs001,
     ShaderSharpBilinear,
+    ShaderScanlines,
     ScreenInteger,
     ScreenRatio,
     ScreenStretch,
@@ -38,7 +39,7 @@ pub enum Toast {
 }
 
 impl Toast {
-    const FIXED: [Toast; 25] = [
+    const FIXED: [Toast; 26] = [
         Toast::StateSaved,
         Toast::StateLoaded,
         Toast::NeedsGpsp,
@@ -61,6 +62,7 @@ impl Toast {
         Toast::ShaderAgb001,
         Toast::ShaderAgs001,
         Toast::ShaderSharpBilinear,
+        Toast::ShaderScanlines,
         Toast::ScreenInteger,
         Toast::ScreenRatio,
         Toast::ScreenStretch,
@@ -104,6 +106,7 @@ impl Toast {
             Toast::ShaderAgb001 => "Shader: AGB-001",
             Toast::ShaderAgs001 => "Shader: AGS-001",
             Toast::ShaderSharpBilinear => "Shader: Sharp Bilinear",
+            Toast::ShaderScanlines => "Shader: Scanlines",
             Toast::ScreenInteger => "Screen: Integer",
             Toast::ScreenRatio => "Screen: Original Ratio",
             Toast::ScreenStretch => "Screen: Stretch",

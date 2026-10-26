@@ -3,6 +3,7 @@
 //! Stage M1: display-only preview carts, not executable games.
 mod library;
 mod cart_disk_cache;
+mod studio_preview;
 mod settings;
 mod recents;
 mod favorites;

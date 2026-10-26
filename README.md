@@ -95,6 +95,90 @@ We'll cover RetroArch compatibility and Syncthing in more detail below.
 
 Simply install the newer APK over your existing installation. **Do not uninstall the previous version or clear its data**, or you could lose your settings and locally stored saves.
 
+## Run locally on macOS (Apple Silicon)
+
+Run the Android app in an ARM64 emulator to try SNES on your Mac. The debug APK
+uses the separate package `fyi.slot.konkr.diag` and keeps its saves isolated.
+
+### Start the prepared local emulator
+
+Run these commands from the repository root. They use the SDK and `SlotSnesTest`
+AVD prepared for local SNES testing, plus `dist/slot-for-konkr-snes-debug.apk`.
+The `.build/` and `dist/` directories are generated and ignored by Git; they are
+**not included in a fresh clone**. With your own Android SDK, substitute its
+paths and your ARM64 AVD name, enable hardware keyboard input, and use a debug
+APK built from this branch. The [Android build workflow](.github/workflows/konkr-production.yml)
+records the pinned tools, core builds, and Cart Studio packaging steps.
+
+```bash
+source .build/local-env.sh
+export ANDROID_AVD_HOME="$PWD/.build/avd"
+
+"$ANDROID_SDK_ROOT/emulator/emulator" \
+  -avd SlotSnesTest -port 5556 -gpu swiftshader \
+  -no-snapshot > /tmp/slot-emulator.log 2>&1 &
+```
+
+Once the Android home screen appears, install and open the app from the same
+terminal:
+
+```bash
+adb -s emulator-5556 install -r dist/slot-for-konkr-snes-debug.apk
+adb -s emulator-5556 shell am start \
+  -n fyi.slot.konkr.diag/fyi.slot.konkr.MainActivity
+```
+
+### Add a SNES game
+
+Replace the example path with one of your `.sfc` or `.smc` files:
+
+```bash
+adb -s emulator-5556 shell mkdir -p /sdcard/Download/SNES
+adb -s emulator-5556 push "/path/to/your-game.sfc" /sdcard/Download/SNES/
+```
+
+In the app, press **Enter → Library → Choose ROM Folder**, then select
+**Download → SNES → Use this folder** and allow access. If that folder is already
+selected, use **Library → Refresh Library**. Return to the carousel, select your
+cartridge with the arrow keys, and press **Z** to launch it.
+
+The generated `Probe` cartridges deliberately show a **solid red screen**. They
+exercise the emulator's video, input and save interfaces; use your own game to
+assess gameplay and sound.
+
+### Mac keyboard controls
+
+These mappings apply to the debug app in the Android emulator. Click inside the
+emulator window to give it keyboard focus.
+
+| Keyboard | Control |
+|---|---|
+| Arrow keys | D-pad |
+| Z / X | A / B; confirm / back |
+| A / S | X / Y |
+| Q / E | L1 / R1; SNES shoulder buttons during play |
+| 1 / 2 | L2 / R2; rewind / fast-forward |
+| Enter | Start; main menu on the carousel |
+| Space | Select |
+| Tab | slot. cap; in-game menu |
+
+### Run the automated SNES checks
+
+With Rust 1.96, Git, Python 3, make and a C++ compiler available, run this from
+the repository root. In the prepared checkout, `source .build/local-env.sh`
+selects the installed Rust toolchain.
+
+```bash
+bash scripts/test-snes9x.sh
+```
+
+This builds the pinned Snes9x core and runs generated NTSC, PAL and
+high-resolution/interlaced cartridges. It verifies video dimensions, timing,
+audio-buffer delivery, button input, SRAM and save-state restoration. All three
+runs should report `1 passed; 0 failed`. This command runs without an Android
+emulator or a graphical game window. See [SNES support and validation](docs/snes-support.md)
+for coverage and remaining physical KONKR testing.
+
 ## Controls & Hotkeys
 
 <p align="center"><img src=".github/resources/konkr-slot-keycap-v3.svg" alt="slot. button" height="54" /></p>
@@ -107,12 +191,12 @@ The KONKR's round top button is called **slot. cap** in this port. Since it cont
 |---|---|
 | <kbd>←</kbd> / <kbd>→</kbd> | Browse cartridges |
 | <kbd>↑</kbd> / <kbd>↓</kbd> | Jump to the next or previous letter |
-| <kbd>L1</kbd> / <kbd>R1</kbd> | Switch between GBA, GB and GBC shelves |
+| <kbd>L1</kbd> / <kbd>R1</kbd> | Switch between GBA, GB, GBC and SNES shelves |
 | <img src=".github/resources/konkr-slot-keycap-v3.svg" alt="slot. button" height="24" align="middle" /> / <kbd>A</kbd> | Insert a cartridge and resume |
 | Hold <img src=".github/resources/konkr-slot-keycap-v3.svg" alt="slot. button" height="24" align="middle" /> / <kbd>A</kbd> | Start a game fresh |
 | <kbd>Y</kbd> | Add or remove a favorite |
 | <kbd>X</kbd> | Open the selected cartridge in Cart Studio |
-| <kbd>SELECT</kbd> | Choose the emulator core (mGBA or gpSP for GBA, mGBA or Gambatte for GB/GBC) |
+| <kbd>SELECT</kbd> | Choose the emulator core (mGBA or gpSP for GBA, mGBA or Gambatte for GB/GBC; SNES uses Snes9x) |
 | <kbd>START</kbd> | Open the main menu |
 
 ### In Game
